@@ -58,7 +58,7 @@ window.IQ = (() => {
             <p class="iq-msg ${kind || ""}" role="status">${msg || ""}</p>
             <button class="iq-primary" type="submit">${{ signin: "Sign in", signup: "Create login", forgot: "Email me a reset link", newpass: "Save password" }[view]}</button>
             <div class="iq-alt">
-              ${view === "signin" ? `<a href="#" data-v="forgot">Forgot password?</a><a href="#" data-v="signup">Create a login</a>` : ""}
+              ${view === "signin" ? `<a href="#" data-v="forgot">Forgot password?</a><span>New here? Ask Joe for a login.</span>` : ""}
               ${view === "signup" || view === "forgot" ? `<a href="#" data-v="signin">Back to sign in</a>` : ""}
             </div>
           </form>`;
