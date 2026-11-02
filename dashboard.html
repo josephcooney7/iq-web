@@ -296,7 +296,8 @@ th { color: var(--ink-3); font-weight: 600; }
 
   function render(s, isDemo) {
     const nowMs = new Date(s.now).getTime() || Date.now();
-    const cps = s.checkpoints || [];
+    // Only show lanes that have a unit assigned or have counted people before; skip empty placeholders.
+    const cps = (s.checkpoints || []).filter((c) => c.units || Number(c.total_in) > 0);
     const ev = s.event || {};
     $("evName").textContent = ev.name || "No live event";
     $("evSub").textContent = [ev.client, ev.venue].filter(Boolean).join(" · ") || "";
@@ -344,7 +345,7 @@ th { color: var(--ink-3); font-weight: 600; }
         ${spark(c.series || [], color)}
         <div class="foot">${c.last_received ? "Last data " + ago(c.last_received, nowMs) : "Waiting for the first minute of counts"}</div>
       </article>`;
-    }).join("") || `<div class="notice">This event has no checkpoints set up yet.</div>`;
+    }).join("") || `<div class="notice">No units are assigned to this event yet.</div>`;
 
     $("legend").innerHTML = cps.map((c, i) => `<span><span class="swatch" style="background:${COLORS[i % COLORS.length]}"></span>${esc(c.name)}</span>`).join("");
     drawChart(s, cps, nowMs, isDemo);
