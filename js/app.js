@@ -110,7 +110,7 @@ window.IQ = (() => {
     const bar = opts.bar;
     let { data } = await sb.auth.getSession();
     if (recovering || /type=recovery/.test(location.hash)) { await loginScreen("newpass"); recovering = false; }
-    else if (!data.session) await loginScreen("signin");
+    else if (!data.session) await loginScreen(location.hash === "#join" ? "signup" : "signin");
     let me;
     try { me = await rpc("web_me"); } catch (e) { me = { signed_in: true, staff: false, role: null, error: e }; }
     if (bar) {
