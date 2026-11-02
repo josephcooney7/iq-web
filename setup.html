@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IQ Unit Setup</title>
+<meta name="description" content="Set up a Stapleton IQ counting unit: camera photo and counting lines.">
+<meta name="theme-color" content="#0d5f7a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stapleton IQ">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #eef2f4; --panel: #fbfcfd; --ink: #12202b; --ink-2: #4a5864; --ink-3: #7a8792;
+  --line: #d5dde3; --accent: #0d5f7a; --accent-ink: #ffffff;
+  --both: #e5322d; --in: #22b35a; --out: #f39a00;
+  --good: #1f7a3e; --warn: #a96500; --bad: #b3261e;
+  --f-display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161d; --panel: #15202a; --ink: #e9eef2; --ink-2: #aebbc6; --ink-3: #7f8e9a;
+    --line: #273642; --accent: #5fb4d3; --accent-ink: #08141b; --good: #5cc283; --warn: #e6a640; --bad: #f08a80;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161d; --panel: #15202a; --ink: #e9eef2; --ink-2: #aebbc6; --ink-3: #7f8e9a;
+  --line: #273642; --accent: #5fb4d3; --accent-ink: #08141b; --good: #5cc283; --warn: #e6a640; --bad: #f08a80;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; }
+main { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+h1 { font-family: var(--f-display); font-size: 28px; margin: 0; letter-spacing: .02em; }
+select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.status { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; color: var(--ink-2); margin-bottom: 12px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--ink-3); vertical-align: 1px; }
+.dot.on { background: var(--good); } .dot.off { background: var(--bad); }
+.frame { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; touch-action: none; user-select: none; -webkit-user-select: none; }
+.frame img[hidden] { display: none; }
+.frame img { display: block; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; color: #c9d3da; text-align: center; padding: 16px; font-size: 15px; }
+.frame svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.handle { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 3px solid #fff;
+  box-shadow: 0 1px 5px rgba(0,0,0,.5); cursor: grab; touch-action: none; }
+.handle::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; } /* bigger touch target */
+.label { position: absolute; transform: translate(-50%, -50%); padding: 3px 8px; border-radius: 6px; font-size: 13px; font-weight: 700;
+  color: #fff; white-space: nowrap; pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.hint { font-size: 14px; color: var(--ink-2); margin: 10px 2px 14px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+button { font: inherit; font-weight: 600; border-radius: 10px; padding: 12px 16px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; flex: 1 1 auto; min-height: 48px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: .5; cursor: default; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin: 0 0 8px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; flex: 1; background: transparent; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.panel .row { margin: 10px 0 0; }
+.counts { display: flex; gap: 24px; font-family: var(--f-display); font-size: 30px; }
+.counts small { display: block; font-family: var(--f-body); font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+#msg { min-height: 22px; font-size: 14px; margin: 4px 2px 10px; }
+#msg.warn { color: var(--warn); } #msg.bad { color: var(--bad); } #msg.good { color: var(--good); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Unit setup</h1>
+    <select id="unitSel" aria-label="Unit"><option>IQ-01</option></select>
+  </header>
+  <div class="status">
+    <span><span class="dot" id="onDot"></span><span id="onTxt">Connecting…</span></span>
+    <span id="photoTxt"></span>
+  </div>
+
+  <div class="frame" id="frame">
+    <img id="snap" alt="Still photo from the unit's camera" hidden>
+    <div class="empty" id="empty">No photo yet. Press “Take new photo”.</div>
+    <svg id="svg" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <div id="overlay"></div>
+  </div>
+  <p class="hint" id="hint">Drag the dots at each end of a line. Put lines across the walkway, where everyone has to pass.</p>
+
+  <div id="msg" role="status"></div>
+  <div class="row">
+    <button id="photoBtn">Take new photo</button>
+    <button id="saveBtn" class="primary" disabled>Save lines</button>
+  </div>
+
+  <div class="panel">
+    <h2>Counting lines</h2>
+    <div class="seg" role="group" aria-label="Line setup">
+      <button id="modeOne" aria-pressed="true">One line, both ways</button>
+      <button id="modeTwo" aria-pressed="false">Separate in &amp; out</button>
+    </div>
+    <label style="display:flex;margin-top:12px;font-size:15px;gap:10px;align-items:center">
+      <input type="checkbox" id="zoneChk" style="width:22px;height:22px">
+      Ignore zone: a grey box where nobody is counted (e.g. a guard's post). Drag its corners.
+    </label>
+    <label id="backWrap" style="display:none;margin-top:12px;font-size:15px;gap:10px;align-items:center">
+      <input type="checkbox" id="backChk" style="width:22px;height:22px">
+      Entrance also counts people walking back (for detectors, so a re-pass isn't counted twice)
+    </label>
+    <div class="row">
+      <button id="flipBtn">Swap “in” side ⇅</button>
+      <button id="resetBtn">Reset lines</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2 id="countTitle">Counted today</h2>
+    <div class="counts"><div><small>In</small><span id="inN">–</span></div><div><small>Out</small><span id="outN">–</span></div><div><small>Net through</small><span id="netN">–</span></div></div>
+    <div class="row"><button id="zeroBtn">Reset to zero</button></div>
+    <p class="hint" style="margin:8px 2px 0">Starts a fresh test count. Nothing is deleted. Counts arrive about every 30 seconds.</p>
+  </div>
+</main>
+
+<script src="/js/supabase.js"></script>
+<script src="/js/app.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const COLORS = { both: "#e5322d", in: "#22b35a", out: "#f39a00" };
+  const ONE = () => [{ p: [0.05, 0.5, 0.95, 0.5], dir: 1, count: "both" }];
+  const TWO = () => [{ p: [0.05, 0.4, 0.95, 0.4], dir: 1, count: "in" }, { p: [0.05, 0.65, 0.95, 0.65], dir: 1, count: "out" }];
+  let ready = false, state = null, unit = "IQ-01";
+  let lines = ONE(), zones = [], dirty = false, busy = false, drag = null;
+  try { unit = localStorage.getItem("iq-unit") || unit; } catch {}
+  const fromUrl = (location.pathname.match(/^\/u\/([A-Za-z0-9_-]{1,40})\/?$/) || [])[1] || new URLSearchParams(location.search).get("unit");
+  if (fromUrl) unit = fromUrl.toUpperCase();
+
+  const safeLabel = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  const ago = (t) => {
+    if (!t) return "";
+    const s = Math.max(0, Math.round((Date.now() - new Date(t).getTime()) / 1000));
+    if (s < 60) return s + " s ago"; if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " h ago"; return new Date(t).toLocaleDateString();
+  };
+  function say(text, kind) { const m = $("msg"); m.textContent = text || ""; m.className = kind || ""; }
+
+  /* ---------- database (signed-in user, checked by the database) ---------- */
+  function call(action) {
+    const l = safeLabel(unit);
+    if (action === "save_lines") {
+      const clean = lines.map((x) => ({ p: x.p.map((v) => Math.round(clamp(v) * 1000) / 1000), dir: x.dir > 0 ? 1 : -1, count: ["both", "in", "out"].includes(x.count) ? x.count : "both" }));
+      const cleanZones = zones.map((z) => z.map((v) => Math.round(clamp(v) * 1000) / 1000));
+      return IQ.rpc("web_unit_lines", { p_label: l, p_action: "save_all", p_lines: { lines: clean, zones: cleanZones } });
+    }
+    const a = ["request_snapshot", "reset_counts"].includes(action) ? action : "get";
+    return IQ.rpc("web_unit_lines", { p_label: l, p_action: a, p_lines: null });
+  }
+  const explain = IQ.explain;
+
+  /* ---------- drawing ---------- */
+  function drawLines() {
+    const svg = $("svg"), ov = $("overlay");
+    svg.replaceChildren(); ov.replaceChildren();
+    lines.forEach((ln, i) => {
+      const [x1, y1, x2, y2] = ln.p, col = lines.length > 1 ? (i === 0 ? COLORS.in : COLORS.out) : (COLORS[ln.count] || COLORS.both);
+      const L = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      L.setAttribute("x1", x1 * 1600); L.setAttribute("y1", y1 * 900); L.setAttribute("x2", x2 * 1600); L.setAttribute("y2", y2 * 900);
+      L.setAttribute("stroke", col); L.setAttribute("stroke-width", "5"); L.setAttribute("vector-effect", "non-scaling-stroke");
+      L.setAttribute("stroke-linecap", "round");
+      svg.appendChild(L);
+      // "in" side: right of p1->p2 (in screen coords) when dir = 1
+      const dx = (x2 - x1) * 16, dy = (y2 - y1) * 9, len = Math.hypot(dx, dy) || 1;
+      let nx = -dy / len, ny = dx / len; if (ln.dir < 0) { nx = -nx; ny = -ny; }
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, off = 0.09;
+      const arrow = (ang) => ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"][Math.round(((ang * 180 / Math.PI) + 360) % 360 / 45) % 8];
+      const lab = (txt, sx, sy) => {
+        const d = document.createElement("div"); d.className = "label"; d.style.background = col;
+        d.style.left = clamp(mx + sx * off * 9 / 16) * 100 + "%"; d.style.top = clamp(my + sy * off) * 100 + "%";
+        d.textContent = txt; ov.appendChild(d);
+      };
+      const inArrow = arrow(Math.atan2(ny, nx)), outArrow = arrow(Math.atan2(-ny, -nx));
+      if (ln.count === "both") { lab("IN " + inArrow, nx, ny); lab("OUT " + outArrow, -nx, -ny); }
+      else if (ln.count === "in") lab("IN " + inArrow, nx, ny);
+      else lab("OUT " + outArrow, -nx, -ny);
+      [0, 1].forEach((end) => {
+        const h = document.createElement("div"); h.className = "handle"; h.style.background = col;
+        h.style.left = ln.p[end * 2] * 100 + "%"; h.style.top = ln.p[end * 2 + 1] * 100 + "%";
+        h.setAttribute("aria-label", `Line ${i + 1} end ${end + 1}`);
+        h.addEventListener("pointerdown", (ev) => { ev.preventDefault(); drag = { i, end }; $("frame").setPointerCapture(ev.pointerId); });
+        ov.appendChild(h);
+      });
+    });
+    zones.forEach((z, k) => {
+      const [x1, y1, x2, y2] = z;
+      const R = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      R.setAttribute("x", Math.min(x1, x2) * 1600); R.setAttribute("y", Math.min(y1, y2) * 900);
+      R.setAttribute("width", Math.abs(x2 - x1) * 1600); R.setAttribute("height", Math.abs(y2 - y1) * 900);
+      R.setAttribute("fill", "rgba(120,130,140,.35)"); R.setAttribute("stroke", "#ffffff");
+      R.setAttribute("stroke-width", "3"); R.setAttribute("stroke-dasharray", "10 6"); R.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.appendChild(R);
+      const t = document.createElement("div"); t.className = "label"; t.style.background = "#5b6670";
+      t.style.left = ((x1 + x2) / 2) * 100 + "%"; t.style.top = ((y1 + y2) / 2) * 100 + "%";
+      t.textContent = "IGNORE"; ov.appendChild(t);
+      [0, 1].forEach((end) => {
+        const h = document.createElement("div"); h.className = "handle"; h.style.background = "#5b6670";
+        h.style.borderRadius = "6px";
+        h.style.left = z[end * 2] * 100 + "%"; h.style.top = z[end * 2 + 1] * 100 + "%";
+        h.setAttribute("aria-label", `Ignore zone corner ${end + 1}`);
+        h.addEventListener("pointerdown", (ev) => { ev.preventDefault(); drag = { zone: k, end }; $("frame").setPointerCapture(ev.pointerId); });
+        ov.appendChild(h);
+      });
+    });
+    $("zoneChk").checked = zones.length > 0;
+    const two = lines.length > 1;
+    $("backWrap").style.display = two ? "flex" : "none";
+    $("backChk").checked = two && lines[0].count === "both";
+    $("modeOne").setAttribute("aria-pressed", String(!two));
+    $("modeTwo").setAttribute("aria-pressed", String(two));
+    $("hint").textContent = two
+      ? "Green line counts people coming IN, orange counts people going OUT. Anyone crossing a line the wrong way is ignored. Drag the dots to move the ends."
+      : "Drag the dots at each end of the red line. Put it across the walkway, where everyone has to pass.";
+    $("saveBtn").disabled = !dirty || busy || !ready;
+  }
+
+  function render() {
+    if (!state) return;
+    $("onDot").className = "dot " + (state.online ? "on" : "off");
+    $("onTxt").textContent = state.online ? "Unit online" : "Unit offline" + (state.last_seen_at ? " (seen " + ago(state.last_seen_at) + ")" : "");
+    $("photoTxt").textContent = state.snapshot_taken_at ? "Photo " + ago(state.snapshot_taken_at) : "";
+    if (state.snapshot) { $("snap").src = "data:image/jpeg;base64," + state.snapshot; $("snap").hidden = false; $("empty").hidden = true; }
+    if (!dirty && Array.isArray(state.lines) && state.lines.length) lines = state.lines.map((l) => ({ p: l.p.map(Number), dir: Number(l.dir), count: l.count }));
+    if (!dirty && Array.isArray(state.zones)) zones = state.zones.map((z) => z.map(Number));
+    $("inN").textContent = Number(state.today_in || 0).toLocaleString();
+    $("outN").textContent = Number(state.today_out || 0).toLocaleString();
+    $("netN").textContent = Math.max(0, Number(state.today_in || 0) - Number(state.today_out || 0)).toLocaleString();
+    $("countTitle").textContent = state.count_from
+      ? "Counted since " + new Date(state.count_from).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      : "Counted today";
+    drawLines();
+  }
+
+  async function refresh() {
+    if (!ready) return false;
+    try { state = await call("get"); render(); return true; }
+    catch (e) { say(explain(e), "bad"); return false; }
+  }
+
+  async function takePhoto() {
+    if (busy || !ready) return;
+    busy = true; $("photoBtn").disabled = true; drawLines();
+    try {
+      const r = await call("request_snapshot");
+      const asked = new Date(r.snapshot_requested_at).getTime();
+      say(r.online ? "Asking the unit for a photo… (up to 30 s)" : "The unit looks offline. It will send the photo when it's back.", r.online ? "" : "warn");
+      const deadline = Date.now() + 90000;
+      while (Date.now() < deadline) {
+        await new Promise((ok) => setTimeout(ok, 4000));
+        const s = await call("get");
+        if (s.snapshot_taken_at && new Date(s.snapshot_taken_at).getTime() >= asked - 1000) { state = s; render(); say("New photo in.", "good"); return; }
+      }
+      say("No photo yet. Check the unit is on and counting, then try again.", "warn");
+    } catch (e) { say(explain(e), "bad"); }
+    finally { busy = false; $("photoBtn").disabled = false; drawLines(); }
+  }
+
+  async function save() {
+    if (busy || !ready) return;
+    busy = true; drawLines();
+    try {
+      state = await call("save_lines"); dirty = false; render();
+      say("Saved. Waiting for the unit to pick it up (about 15 s)…");
+      const want = state.version, deadline = Date.now() + 60000;
+      while (Date.now() < deadline) {
+        await new Promise((ok) => setTimeout(ok, 4000));
+        const s = await call("get"); state = s; render();
+        if (s.applied_version >= want) { say("Done. The unit is counting with these lines.", "good"); return; }
+      }
+      say("Saved. The unit will switch as soon as it's online.", "warn");
+    } catch (e) { say(explain(e), "bad"); }
+    finally { busy = false; drawLines(); }
+  }
+
+  /* ---------- interactions ---------- */
+  const frame = $("frame");
+  frame.addEventListener("pointermove", (ev) => {
+    if (!drag) return;
+    const r = frame.getBoundingClientRect();
+    const pts = drag.zone !== undefined ? zones[drag.zone] : lines[drag.i].p;
+    pts[drag.end * 2] = clamp((ev.clientX - r.left) / r.width);
+    pts[drag.end * 2 + 1] = clamp((ev.clientY - r.top) / r.height);
+    dirty = true; say(""); drawLines();
+  });
+  const end = () => { drag = null; };
+  frame.addEventListener("pointerup", end); frame.addEventListener("pointercancel", end);
+
+  const change = (fn) => { fn(); dirty = true; say(""); drawLines(); };
+  $("modeOne").addEventListener("click", () => { if (lines.length > 1) change(() => { const d = lines[0].dir; lines = ONE(); lines[0].dir = d; }); });
+  $("modeTwo").addEventListener("click", () => { if (lines.length === 1) change(() => { const d = lines[0].dir; lines = TWO(); lines.forEach((l) => (l.dir = d)); }); });
+  $("zoneChk").addEventListener("change", (e) => change(() => { zones = e.target.checked ? [[0.05, 0.1, 0.25, 0.45]] : []; }));
+  $("backChk").addEventListener("change", (e) => change(() => { if (lines.length > 1) lines[0].count = e.target.checked ? "both" : "in"; }));
+  $("flipBtn").addEventListener("click", () => change(() => lines.forEach((l) => (l.dir = -l.dir))));
+  $("resetBtn").addEventListener("click", () => change(() => { lines = lines.length > 1 ? TWO() : ONE(); }));
+  $("zeroBtn").addEventListener("click", async () => {
+    if (busy || !ready) return;
+    busy = true; $("zeroBtn").disabled = true;
+    try {
+      const s = await call("reset_counts");
+      if (!s.snapshot && state) s.snapshot = state.snapshot;
+      state = s; render(); say("Counts reset to zero. Walk the line and watch them go up.", "good");
+    } catch (e) { say(explain(e), "bad"); }
+    finally { busy = false; $("zeroBtn").disabled = false; drawLines(); }
+  });
+  $("photoBtn").addEventListener("click", takePhoto);
+  $("saveBtn").addEventListener("click", save);
+  $("unitSel").addEventListener("change", (e) => {
+    unit = e.target.value; dirty = false;
+    try { localStorage.setItem("iq-unit", unit); } catch {}
+    history.replaceState(null, "", "/u/" + encodeURIComponent(unit));
+    $("snap").hidden = true; $("empty").hidden = false; refresh();
+  });
+
+  async function loadUnits() {
+    try {
+      const list = await IQ.rpc("web_units");
+      if (Array.isArray(list) && list.length) {
+        if (!list.includes(unit)) { say("Unit " + unit + " isn't registered. Showing " + list[0] + ".", "warn"); unit = list[0]; }
+        $("unitSel").replaceChildren(...list.map((l) => { const o = document.createElement("option"); o.textContent = l; o.selected = l === unit; return o; }));
+      }
+    } catch {}
+  }
+
+  drawLines();
+  const bar = IQ.topbar("setup");
+  (async () => {
+    try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+    ready = true;
+    try { localStorage.setItem("iq-unit", unit); } catch {}
+    await loadUnits();
+    if (await refresh()) { if (!state.snapshot) say("Press “Take new photo” to see what the camera sees."); }
+    setInterval(() => { if (!busy && !drag && !dirty && !document.hidden) refresh(); }, 15000);
+  })();
+})();
+</script>
+</body>
+</html>

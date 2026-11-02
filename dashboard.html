@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stapleton IQ Live</title>
+<meta name="description" content="Live checkpoint counts from Stapleton IQ units.">
+<meta name="theme-color" content="#0d5f7a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stapleton IQ">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: checkpoint ops board. Event bar on top, headline totals, one card per checkpoint, then the flow chart. */
+:root {
+  --bg: #eef2f4;
+  --panel: #fbfcfd;
+  --ink: #12202b;
+  --ink-2: #4a5864;
+  --ink-3: #7a8792;
+  --line: #d5dde3;
+  --accent: #0d5f7a;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --good: #1f7a3e;
+  --warn: #a96500;
+  --bad: #b3261e;
+  --demo-bg: #fff3d6;
+  --demo-ink: #6b4400;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161d; --panel: #15202a; --ink: #e9eef2; --ink-2: #aebbc6; --ink-3: #7f8e9a;
+    --line: #273642; --accent: #5fb4d3; --s1: #3987e5; --s2: #d95926;
+    --good: #5cc283; --warn: #e6a640; --bad: #f08a80; --demo-bg: #3a2c0c; --demo-ink: #f5d58d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161d; --panel: #15202a; --ink: #e9eef2; --ink-2: #aebbc6; --ink-3: #7f8e9a;
+  --line: #273642; --accent: #5fb4d3; --s1: #3987e5; --s2: #d95926;
+  --good: #5cc283; --warn: #e6a640; --bad: #f08a80; --demo-bg: #3a2c0c; --demo-ink: #f5d58d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px;
+  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 40px max(16px, env(safe-area-inset-left, 0px)); }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+.num { font-family: var(--f-display); font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1; }
+.label { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+button, select { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Top bar */
+.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; }
+.brand { display: grid; gap: 2px; min-width: 0; }
+.brand .mark { font-family: var(--f-display); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--accent); }
+.brand h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 700; line-height: 1.05; }
+.brand .sub { color: var(--ink-2); font-size: 14px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, .btn {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 14px; cursor: pointer;
+}
+.btn:hover, select:hover { border-color: var(--ink-3); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border: 1px solid currentColor; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.live { color: var(--good); }
+.pill.live .dot { animation: pulse 2s ease-in-out infinite; }
+.pill.stale { color: var(--warn); }
+.pill.off { color: var(--ink-3); }
+.pill.demo { color: var(--demo-ink); background: var(--demo-bg); border-color: transparent; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .pill.live .dot { animation: none; } }
+
+.banner { background: var(--demo-bg); color: var(--demo-ink); border-radius: 8px; padding: 10px 14px; font-size: 14px; display: flex; gap: 10px 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.banner .btn { background: transparent; border-color: currentColor; color: inherit; }
+.notice { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 12px 14px; color: var(--ink-2); font-size: 14px; }
+
+/* Headline strip */
+.headline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 3px solid var(--ink); border-bottom: 1px solid var(--line); }
+.headline > div { padding: 14px 16px 16px 0; display: grid; gap: 6px; min-width: 0; }
+.headline > div + div { padding-left: 16px; border-left: 1px solid var(--line); }
+.headline .num { font-size: clamp(40px, 7vw, 64px); }
+.headline .unit { font-size: 13px; color: var(--ink-2); }
+
+/* Checkpoint cards */
+.cps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.cp { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.cp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.cp-head h2 { font-size: 24px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.cp .units { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.cp-stats { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; align-items: end; }
+.cp-stats > div { display: grid; gap: 4px; min-width: 0; }
+.cp-stats .big { font-size: 46px; }
+.cp-stats .mid { font-size: 28px; }
+.spark { width: 100%; height: 48px; display: block; }
+.cp .foot { font-size: 12.5px; color: var(--ink-3); }
+
+/* Chart */
+.chart-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.chart-head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: baseline; }
+.chart-head h2 { font-size: 22px; font-weight: 600; }
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-box { position: relative; min-width: 0; }
+#chart { width: 100%; height: 240px; display: block; }
+#chart text { fill: var(--ink-3); font-family: var(--f-mono); font-size: 11px; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--panel); font-size: 12.5px; padding: 7px 9px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); }
+.tip b { font-family: var(--f-mono); font-weight: 500; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--ink-2); font-size: 14px; padding: 16px; }
+details summary { cursor: pointer; color: var(--ink-2); font-size: 13.5px; }
+.table-wrap { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; width: 100%; }
+th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-3); font-weight: 600; }
+
+.privacy { font-size: 12.5px; color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; }
+
+@media (max-width: 640px) {
+  .headline { grid-template-columns: 1fr 1fr; }
+  .headline > div:first-child { grid-column: 1 / -1; }
+  .headline > div:nth-child(2) { padding-left: 0; border-left: 0; }
+  .headline > div + div { border-top: 1px solid var(--line); }
+  .cp-stats .big { font-size: 40px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="mark">Stapleton IQ · Live</span>
+      <h1 id="evName">Checkpoint counts</h1>
+      <span class="sub" id="evSub">Connecting to the counting units…</span>
+    </div>
+    <div class="controls">
+      <span class="status"><span class="pill off" id="pill"><span class="dot"></span><span id="pillTxt">Connecting</span></span><span id="updated"></span></span>
+      <label class="label" for="evSel" hidden>Event</label>
+      <select id="evSel" aria-label="Event" hidden></select>
+      <select id="winSel" aria-label="Time window">
+        <option value="60">Last hour</option>
+        <option value="120" selected>Last 2 hours</option>
+        <option value="240">Last 4 hours</option>
+      </select>
+      <button class="btn" id="refreshBtn" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <div class="banner" id="demoBanner" hidden>
+    <span id="demoTxt"><b>Demo data.</b> These numbers are simulated so you can see how the page works.</span>
+    <button class="btn" id="demoExit" type="button">Show live counts</button>
+  </div>
+  <div class="notice" id="notice" hidden></div>
+
+  <section class="headline" aria-label="Totals">
+    <div><span class="label">People screened</span><span class="num" id="hTotal">–</span><span class="unit" id="hTotalSub">since the event opened</span></div>
+    <div><span class="label">Last 60 minutes</span><span class="num" id="hHour">–</span><span class="unit">people in</span></div>
+    <div><span class="label">Current pace</span><span class="num" id="hPace">–</span><span class="unit">people per hour, last 15 min</span></div>
+  </section>
+
+  <section class="cps" id="cps" aria-label="Checkpoints"></section>
+
+  <section class="chart-card" aria-label="Flow over time">
+    <div class="chart-head">
+      <h2>People through the checkpoint, every 5 minutes</h2>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="chart-box" id="chartBox">
+      <svg id="chart" role="img" aria-label="Stacked bars of people counted per 5 minutes by checkpoint"></svg>
+      <div class="tip" id="tip" hidden></div>
+      <div class="empty" id="empty" hidden>
+        <div>
+          <p style="margin:0 0 10px">No counts yet in this window. The page updates by itself once the unit sends its first minute.</p>
+          <button class="btn" id="demoBtn" type="button">Preview with demo data</button>
+        </div>
+      </div>
+    </div>
+    <details>
+      <summary>Show as a table</summary>
+      <div class="table-wrap"><table id="tbl"></table></div>
+    </details>
+  </section>
+
+  <footer class="privacy">
+    <span>Counts only. The units send per-minute totals: no images, no video, nothing about individuals.</span>
+    <span id="foot"></span>
+  </footer>
+</div>
+
+<script src="/js/supabase.js"></script>
+<script src="/js/app.js"></script>
+<script>
+(() => {
+  const POLL_MS = 20000;
+  const $ = (id) => document.getElementById(id);
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const fmt = (n) => Number(n || 0).toLocaleString("en-US");
+
+  let ready = false, mode = "connecting", live = null, eventId = null, timer = null, busy = false, lastOk = null;
+
+  /* ---------- Demo data (clearly labelled, generated in the browser) ---------- */
+  function demoSnapshot(minutes) {
+    const now = new Date(); now.setSeconds(0, 0);
+    const mk = (name, base, phase, units, total0) => {
+      const series = [];
+      for (let i = minutes; i >= 1; i--) {
+        const t = now.getTime() / 60000 - i;
+        const v = base + 7 * Math.sin(t / 25 + phase) + 4 * Math.sin(t / 7) + ((Math.sin(t * 12.9898 + phase) * 43758.5453) % 1) * 4;
+        series.push(Math.max(0, Math.round(v)));
+      }
+      const sum = (a) => a.reduce((x, y) => x + y, 0);
+      return { name, units, series, total_in: total0 + sum(series), last60_in: sum(series.slice(-60)), last15_in: sum(series.slice(-15)),
+               last_received: new Date(Date.now() - 20000).toISOString(), last_minute: new Date(now - 60000).toISOString() };
+    };
+    return {
+      now: new Date().toISOString(), window_minutes: minutes, events: [],
+      event: { name: "Demo checkpoint", venue: "Simulated data", status: "live", starts_at: new Date(Date.now() - 4 * 3600e3).toISOString() },
+      checkpoints: [mk("Lanes 1-2", 16, 0, "IQ-01", 2140), mk("Lanes 3-4", 12, 1.7, "IQ-02", 1585)]
+    };
+  }
+
+  /* ---------- Live data (signed-in user; the database decides which events they may see) ---------- */
+  async function fetchLive() {
+    const win = parseInt($("winSel").value, 10) || 120;
+    const p = await IQ.rpc("web_dashboard", { p_event_id: eventId && UUID.test(eventId) ? eventId : null, p_minutes: win });
+    if (!p || !Array.isArray(p.checkpoints)) throw new Error("The database answered in an unexpected format.");
+    return p;
+  }
+  const explain = IQ.explain;
+
+  async function tick(manual) {
+    if (mode === "demo") { render(demoSnapshot(parseInt($("winSel").value, 10)), true); return; }
+    if (!ready || busy) return;
+    busy = true;
+    try {
+      const snap = await fetchLive();
+      live = snap; lastOk = Date.now(); mode = "live";
+      $("notice").hidden = true;
+      render(snap, false);
+    } catch (err) {
+      $("notice").textContent = explain(err) + (live ? " Showing the last counts received." : "");
+      $("notice").hidden = false;
+      if (live) render(live, false); else setPill("off", "Not connected");
+    } finally { busy = false; }
+  }
+
+  function schedule() { clearInterval(timer); timer = setInterval(() => { if (!document.hidden) tick(false); }, POLL_MS); }
+
+  /* ---------- Rendering ---------- */
+  const COLORS = ["var(--s1)", "var(--s2)"];
+
+  function setPill(kind, text) { const p = $("pill"); p.className = "pill " + kind; $("pillTxt").textContent = text; }
+
+  function ago(iso, nowMs) {
+    if (!iso) return null;
+    const s = Math.max(0, Math.round((nowMs - new Date(iso).getTime()) / 1000));
+    if (s < 60) return s + " sec ago";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " hr ago";
+    return Math.round(s / 86400) + " days ago";
+  }
+  function cpState(cp, nowMs) {
+    if (!cp.last_received) return ["off", "No data yet"];
+    const age = (nowMs - new Date(cp.last_received).getTime()) / 1000;
+    if (age < 180) return ["live", "Live"];
+    if (age < 900) return ["stale", "Delayed"];
+    return ["off", "Offline"];
+  }
+
+  function spark(series, color) {
+    const w = 300, h = 48, n = series.length, max = Math.max(4, ...series);
+    if (!n) return "";
+    const x = (i) => (i / Math.max(1, n - 1)) * (w - 4) + 2, y = (v) => h - 3 - (v / max) * (h - 8);
+    let d = "", a = `M${x(0)},${h - 1}`;
+    series.forEach((v, i) => { d += (i ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1); a += "L" + x(i).toFixed(1) + "," + y(v).toFixed(1); });
+    a += `L${x(n - 1)},${h - 1}Z`;
+    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${a}" fill="${color}" fill-opacity=".14"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+      <circle cx="${x(n - 1)}" cy="${y(series[n - 1])}" r="3" fill="${color}"/></svg>`;
+  }
+
+  function render(s, isDemo) {
+    const nowMs = new Date(s.now).getTime() || Date.now();
+    const cps = s.checkpoints || [];
+    const ev = s.event || {};
+    $("evName").textContent = ev.name || "No live event";
+    $("evSub").textContent = [ev.client, ev.venue].filter(Boolean).join(" · ") || "";
+    $("demoBanner").hidden = !isDemo;
+    $("demoExit").hidden = !ready;
+
+    // Event picker
+    const sel = $("evSel");
+    if (!isDemo && s.events && s.events.length > 1) {
+      const cur = ev.id;
+      sel.innerHTML = s.events.map((e) => `<option value="${e.id}">${esc(e.name)}${e.client ? " · " + esc(e.client) : ""}</option>`).join("");
+      if (cur) sel.value = cur;
+      sel.hidden = false;
+    } else sel.hidden = true;
+
+    // Headline
+    const sum = (k) => cps.reduce((t, c) => t + Number(c[k] || 0), 0);
+    $("hTotal").textContent = fmt(sum("total_in"));
+    $("hHour").textContent = fmt(sum("last60_in"));
+    $("hPace").textContent = fmt(sum("last15_in") * 4);
+    $("hTotalSub").textContent = ev.starts_at ? "since " + new Date(ev.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "since the event opened";
+
+    // Overall status
+    const latest = cps.map((c) => c.last_received).filter(Boolean).sort().pop();
+    if (isDemo) setPill("demo", "Demo");
+    else { const [k, t] = latest ? cpState({ last_received: latest }, nowMs) : ["off", "Waiting for counts"]; setPill(k, t); }
+    $("updated").textContent = isDemo ? "" : "Checked " + new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    $("foot").textContent = isDemo ? "Simulated numbers" : (latest ? "Last count received " + ago(latest, nowMs) : "No counts received yet");
+
+    // Cards
+    $("cps").innerHTML = cps.map((c, i) => {
+      const [k, t] = isDemo ? ["demo", "Demo"] : cpState(c, nowMs);
+      const color = COLORS[i % COLORS.length];
+      return `<article class="cp">
+        <div class="cp-head">
+          <div><h2><span class="swatch" style="background:${color}"></span>${esc(c.name)}</h2>
+          <span class="units">${c.units ? "Unit " + esc(c.units) : "No unit assigned"}</span></div>
+          <span class="pill ${k}"><span class="dot"></span>${t}</span>
+        </div>
+        <div class="cp-stats">
+          <div><span class="label">Total in</span><span class="num big">${fmt(c.total_in)}</span></div>
+          <div><span class="label">Last 15 min</span><span class="num mid">${fmt(c.last15_in)}</span></div>
+          <div><span class="label">Per hour</span><span class="num mid">${fmt(c.last15_in * 4)}</span></div>
+        </div>
+        ${spark(c.series || [], color)}
+        <div class="foot">${c.last_received ? "Last data " + ago(c.last_received, nowMs) : "Waiting for the first minute of counts"}</div>
+      </article>`;
+    }).join("") || `<div class="notice">This event has no checkpoints set up yet.</div>`;
+
+    $("legend").innerHTML = cps.map((c, i) => `<span><span class="swatch" style="background:${COLORS[i % COLORS.length]}"></span>${esc(c.name)}</span>`).join("");
+    drawChart(s, cps, nowMs, isDemo);
+  }
+
+  function esc(t) { return String(t ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
+
+  let bars = [];
+  function drawChart(s, cps, nowMs, isDemo) {
+    const svg = $("chart");
+    const W = svg.clientWidth || 800, H = 240, L = 40, R = 8, T = 10, B = 26;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const n = Math.max(0, ...cps.map((c) => (c.series || []).length));
+    const end = new Date(nowMs); end.setSeconds(0, 0);
+    const startMs = end.getTime() - n * 60000;
+    // 5-minute buckets
+    const nb = Math.ceil(n / 5);
+    bars = [];
+    for (let b = 0; b < nb; b++) {
+      const vals = cps.map((c) => (c.series || []).slice(b * 5, b * 5 + 5).reduce((x, y) => x + y, 0));
+      bars.push({ t: new Date(startMs + b * 5 * 60000), vals, total: vals.reduce((x, y) => x + y, 0) });
+    }
+    const max = Math.max(10, ...bars.map((b) => b.total));
+    const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
+    const pw = W - L - R, ph = H - T - B, bw = pw / Math.max(1, nb);
+    const y = (v) => T + ph - (v / top) * ph;
+    let g = "";
+    for (let v = 0; v <= top; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+    const every = Math.max(1, Math.ceil(nb / Math.max(2, Math.floor(pw / 70))));
+    bars.forEach((b, i) => {
+      const x0 = L + i * bw + 1, w = Math.max(1, bw - 2);
+      let acc = 0;
+      b.vals.forEach((v, k) => {
+        if (!v) return;
+        const y1 = y(acc + v), y0 = y(acc); acc += v;
+        const h = Math.max(0, y0 - y1 - (acc < b.total ? 0 : 0));
+        g += `<rect x="${x0.toFixed(1)}" y="${y1.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0, h - 1).toFixed(1)}" rx="${Math.min(2, w / 3)}" fill="${COLORS[k % COLORS.length]}"/>`;
+      });
+      if (i % every === 0) g += `<text x="${(x0 + w / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle">${b.t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(" ", "")}</text>`;
+    });
+    g += `<rect id="hit" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/>`;
+    svg.innerHTML = g;
+    const totalAll = bars.reduce((t, b) => t + b.total, 0);
+    $("empty").hidden = isDemo || totalAll > 0;
+    $("demoBtn").hidden = false;
+
+    // table
+    $("tbl").innerHTML = `<thead><tr><th>5 min from</th>${cps.map((c) => `<th>${esc(c.name)}</th>`).join("")}<th>Total</th></tr></thead><tbody>` +
+      bars.slice().reverse().map((b) => `<tr><td>${b.t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</td>${b.vals.map((v) => `<td>${fmt(v)}</td>`).join("")}<td>${fmt(b.total)}</td></tr>`).join("") + "</tbody>";
+
+    const hit = $("hit"), tip = $("tip");
+    const show = (ev) => {
+      const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
+      const i = Math.min(nb - 1, Math.max(0, Math.floor((px - L) / bw)));
+      const b = bars[i]; if (!b) return;
+      const t2 = new Date(b.t.getTime() + 5 * 60000);
+      const f = (d) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      tip.innerHTML = `${f(b.t)}–${f(t2)}<br>` + cps.map((c, k) => `${esc(c.name)}: <b>${fmt(b.vals[k])}</b>`).join("<br>") + `<br>Total: <b>${fmt(b.total)}</b>`;
+      tip.style.left = Math.min(r.width - 70, Math.max(70, (L + i * bw + bw / 2) * (r.width / W))) + "px";
+      tip.style.top = (y(b.total) * (r.height / H)) + "px";
+      tip.hidden = false;
+    };
+    hit.addEventListener("pointermove", show);
+    hit.addEventListener("pointerdown", show);
+    hit.addEventListener("pointerleave", () => (tip.hidden = true));
+  }
+  function niceStep(v) { const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, v)))); const m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+
+  /* ---------- Wiring ---------- */
+  $("refreshBtn").addEventListener("click", () => tick(true));
+  $("winSel").addEventListener("change", () => tick(true));
+  $("evSel").addEventListener("change", (e) => { eventId = e.target.value; tick(true); });
+  $("demoBtn").addEventListener("click", () => { mode = "demo"; tick(true); });
+  $("demoExit").addEventListener("click", () => { mode = "live"; if (live) render(live, false); tick(true); });
+  window.addEventListener("resize", () => { if (mode === "demo") tick(false); else if (live) render(live, false); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(false); });
+
+  // First frame: empty board until the connection answers.
+  setPill("off", "Connecting");
+
+  const bar = IQ.topbar("dashboard");
+  const boot = async () => {
+    try { await IQ.requireLogin({ bar }); } catch { return; }
+    ready = true; mode = "live";
+    await tick(true);
+    schedule();
+  };
+  boot();
+})();
+</script>
+</body>
+</html>

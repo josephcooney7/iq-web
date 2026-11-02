@@ -1,0 +1,15 @@
+{
+  "name": "Stapleton IQ",
+  "short_name": "Stapleton IQ",
+  "description": "Live checkpoint counts and unit setup.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0e161d",
+  "theme_color": "#0d5f7a",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

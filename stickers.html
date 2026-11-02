@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IQ QR Stickers</title>
+<meta name="description" content="Printable QR stickers that open each unit's setup page.">
+<meta name="theme-color" content="#0d5f7a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+* { box-sizing: border-box; }
+main { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-family: var(--f-display); font-size: 30px; margin: 0 0 4px; }
+p { color: var(--ink-2); }
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+.sticker { background: #fff; color: #12202b; border: 1px dashed #b9c4cc; border-radius: 10px; padding: 14px; display: grid; justify-items: center; gap: 6px; break-inside: avoid; }
+.sticker svg { width: 100%; max-width: 190px; height: auto; }
+.sticker b { font-family: var(--f-display); font-size: 28px; letter-spacing: .04em; }
+.sticker small { font-size: 11px; color: #4a5864; text-align: center; }
+button.print { font: inherit; font-weight: 600; border-radius: 10px; padding: 10px 16px; border: 0; background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+@media print {
+  .iq-bar, .noprint { display: none !important; }
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+  .sheet { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="noprint">
+    <h1>QR stickers</h1>
+    <p>One sticker per unit. Scanning it opens that unit's setup page straight away (after signing in once on the phone).</p>
+    <button class="print" type="button" onclick="print()">Print</button>
+  </div>
+  <div class="sheet" id="sheet"></div>
+</main>
+<script src="/js/supabase.js"></script>
+<script src="/js/qrcode.js"></script>
+<script src="/js/app.js"></script>
+<script>
+(async () => {
+  const bar = IQ.topbar("stickers");
+  try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  let units = [];
+  try { units = await IQ.rpc("web_units"); } catch (e) { document.getElementById("sheet").textContent = IQ.explain(e); return; }
+  document.getElementById("sheet").replaceChildren(...units.map((u) => {
+    const url = location.origin + "/u/" + encodeURIComponent(u);
+    const qr = qrcode(0, "M"); qr.addData(url); qr.make();
+    const d = document.createElement("div"); d.className = "sticker";
+    d.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + "<b></b><small></small>";
+    d.querySelector("b").textContent = u;
+    d.querySelector("small").textContent = "Scan to set up · " + location.host;
+    return d;
+  }));
+})();
+</script>
+</body>
+</html>
