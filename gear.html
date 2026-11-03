@@ -43,6 +43,7 @@
         <div class="back"><span class="big-num" id="nBack">0</span><small>Back</small></div>
         <div class="missing"><span class="big-num" id="nMiss">0</span><small>Still missing</small></div>
       </div>
+      <p class="sub" id="bat" style="margin:0 0 12px"></p>
       <div class="list" id="checkList"></div>
       <div class="links"><a class="link" id="sheetLink" href="#">Sign-out sheet for this event (print or save as PDF)</a></div>
     </div>
@@ -98,6 +99,13 @@
     });
     const rows = [...per.values()].filter((p) => p.out);
     const miss = rows.filter((p) => !p.back), back = rows.filter((p) => p.back);
+    // Batteries: add up each sign-out / return sheet once.
+    const sheets = new Map(); moves.forEach((m) => m.batch && sheets.set(m.batch_id, { action: m.action, ...m.batch }));
+    const sum = (a) => [...sheets.values()].filter((b) => b.action === a && b.batteries != null).reduce((t, b) => t + b.batteries, 0);
+    const bOut = sum("out"), bBack = sum("back");
+    $("bat").textContent = [...sheets.values()].some((b) => b.batteries != null)
+      ? `Batteries: ${bOut} went out, ${bBack} back` + (bOut > bBack ? `, ${bOut - bBack} still missing.` : ".") : "";
+    $("bat").style.color = bOut > bBack ? "var(--bad)" : "";
     $("nOut").textContent = rows.length; $("nBack").textContent = back.length; $("nMiss").textContent = miss.length;
     $("checkList").replaceChildren(
       ...miss.map((p) => line(p, "Signed out by " + p.out.by_name + " · " + GEAR.when(p.out.at), "dmg", "Missing")),

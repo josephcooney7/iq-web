@@ -76,6 +76,14 @@ window.GEAR = (() => {
     };
   }
 
+  function day(d) { return d ? new Date(d + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""; }
+  // "Hall B · 4 batteries · out Nov 3 · back Nov 5"
+  function batchText(b) {
+    if (!b) return "";
+    return [b.location, b.batteries != null ? b.batteries + " batter" + (b.batteries === 1 ? "y" : "ies") : "",
+      b.date_out ? "out " + day(b.date_out) : "", b.date_back ? "back " + day(b.date_back) : ""].filter(Boolean).join(" · ");
+  }
+
   // History list. withSerial: show which unit each line is about.
   function history(ul, rows, withSerial) {
     if (!rows.length) { ul.innerHTML = "<li>Nothing yet.</li>"; return; }
@@ -85,9 +93,10 @@ window.GEAR = (() => {
         ${h.condition === "damaged" ? '<span class="tag dmg">Damaged</span>' : ""}
         ${withSerial ? "<b data-t=serial></b> ·" : ""} <b data-t="ev"></b><br>
         <span data-t="by"></span> · ${when(h.at)}
+        ${h.batch ? "<br><span data-t=extra></span>" : ""}
         ${h.note ? "<br>“<span data-t=note></span>”" : ""}
         ${h.has_photo ? '<br><a href="#" class="link">Show photo</a>' : ""}`;
-      fill(li, { serial: h.kind ? h.kind + " " + h.serial : h.serial, ev: h.event_name, by: h.by_name, note: h.note });
+      fill(li, { serial: h.kind ? h.kind + " " + h.serial : h.serial, ev: h.event_name, by: h.by_name, note: h.note, extra: batchText(h.batch) });
       const a = li.querySelector("a.link");
       if (a) a.onclick = async (e) => {
         e.preventDefault(); a.textContent = "Loading…";
@@ -98,5 +107,5 @@ window.GEAR = (() => {
     }));
   }
 
-  return { when, fill, row, history, shrink };
+  return { when, fill, row, history, shrink, day, batchText };
 })();

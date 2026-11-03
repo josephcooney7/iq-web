@@ -91,19 +91,33 @@ td.ser { font-weight: 600; width: 110px; }
         <h3 data-t="title"></h3>
         <div class="fields">
           <div class="fld"><small>Taken out by</small><div data-t="by"></div></div>
-          <div class="fld"><small>Event / location</small><div data-t="ev"></div></div>
+          <div class="fld"><small>Event</small><div data-t="ev"></div></div>
         </div>
         <div class="fields three">
           <div class="fld"><small>Date out</small><div data-t="dout"></div></div>
           <div class="fld"><small>Date back</small><div data-t="dback"></div></div>
           <div class="fld"><small>Returned by</small><div data-t="rby"></div></div>
         </div>
+        <div class="fields three">
+          <div class="fld"><small>Location</small><div data-t="loc"></div></div>
+          <div class="fld"><small>Batteries out</small><div data-t="bout"></div></div>
+          <div class="fld"><small>Batteries back</small><div data-t="bback"></div></div>
+        </div>
         <table><thead><tr><th>Out</th><th>Serial #</th><th>Back</th><th>Condition / notes</th></tr></thead><tbody></tbody></table>
         <div class="damage"><small>Damage or issues to report</small><div data-t="dmg"></div></div>
         <p class="foot">Made by Stapleton IQ from QR scans · printed <span data-t="now"></span></p>`;
+      // Each sign-out / return sheet counted once for batteries.
+      const sheets = new Map(); mv.forEach((m) => m.batch && sheets.set(m.batch_id, { action: m.action, ...m.batch }));
+      const sh = [...sheets.values()];
+      const bsum = (a) => { const l = sh.filter((b) => b.action === a && b.batteries != null); return l.length ? String(l.reduce((t, b) => t + b.batteries, 0)) : ""; };
+      const dd = (v) => v ? d(v + "T12:00:00") : "";
       GEAR.fill(p, {
         title: kind + " Sign-Out Sheet", by: uniq(outs.map((m) => m.by_name)), ev,
-        dout: uniq(outs.map((m) => d(m.at))), dback: uniq(backs.map((m) => d(m.at))), rby: uniq(backs.map((m) => m.by_name)),
+        dout: uniq(outs.map((m) => (m.batch && m.batch.date_out) ? dd(m.batch.date_out) : d(m.at))),
+        dback: uniq(backs.map((m) => (m.batch && m.batch.date_back) ? dd(m.batch.date_back) : d(m.at))) ||
+               uniq(outs.map((m) => m.batch && m.batch.date_back ? dd(m.batch.date_back) + " (expected)" : "")),
+        rby: uniq(backs.map((m) => m.by_name)),
+        loc: uniq(sh.map((b) => b.location)), bout: bsum("out"), bback: bsum("back"),
         dmg: mv.filter((m) => m.condition === "damaged").map((m) => m.serial + ": " + (m.note || "damaged (photo in IQ)")).join("\n"),
         now: new Date().toLocaleString()
       });

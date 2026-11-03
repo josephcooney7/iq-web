@@ -25,14 +25,26 @@
 
   <form id="form" class="panel" hidden novalidate>
     <h2 id="formTitle">Sign out</h2>
-    <label class="f">Event / location
-      <input type="text" name="event" list="eventList" autocomplete="off" required placeholder="e.g. NBAA Miami Opa-locka">
-      <datalist id="eventList"></datalist>
+    <label class="f">Event
+      <select name="evsel"></select>
+    </label>
+    <label class="f" id="evOtherBox" hidden>Event or job name (not in the list)
+      <input type="text" name="evother" autocomplete="off" maxlength="200" placeholder="e.g. Smith wedding, Miami Beach">
+    </label>
+    <label class="f">Location
+      <input type="text" name="location" autocomplete="off" maxlength="200" placeholder="Where the gates are going, e.g. Hall B, main entrance">
+    </label>
+    <div class="two">
+      <label class="f">Date out<input type="date" name="dateout"></label>
+      <label class="f"><span id="backLbl">Date back</span><input type="date" name="dateback"></label>
+    </div>
+    <label class="f"><span id="batLbl">Batteries taken</span>
+      <span class="stepper"><button type="button" data-d="-1" aria-label="One less">−</button><input type="number" name="batteries" inputmode="numeric" min="0" max="500" value="0"><button type="button" data-d="1" aria-label="One more">+</button></span>
     </label>
     <label class="f" id="nameBox" hidden>Your full name (asked once, then it's signed for you every time)
       <input type="text" name="fullname" autocomplete="name" maxlength="80" placeholder="e.g. Joe Cooney">
     </label>
-    <div class="who"><span id="whoLbl">Taken out by</span><b id="whoName"></b><span>Date</span><b id="when"></b></div>
+    <div class="who"><span id="whoLbl">Taken out by</span><b id="whoName"></b></div>
     <h2 style="margin-top:16px" id="itemsTitle">Units</h2>
     <div class="items" id="items"></div>
     <p class="msg" id="msg" role="status"></p>
@@ -49,7 +61,7 @@
   </div>
 
   <div class="panel" id="histPanel" hidden>
-    <h2>History for this unit</h2>
+    <h2 id="histTitle">History for this unit</h2>
     <ul class="hist" id="hist"></ul>
   </div>
   <p class="msg bad" id="err"></p>
@@ -64,6 +76,8 @@
   try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
   const code = decodeURIComponent((location.pathname.match(/^\/g\/([^/]+)/) || [])[1] || new URLSearchParams(location.search).get("code") || "");
   if (!code) { location.replace("/gear"); return; }
+  const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const OTHER = "__other__";
 
   let data;
   async function load() {
@@ -74,25 +88,29 @@
   if (!(await load())) return;
   draw();
 
-  function draw() {
-    const it = data.item;
-    document.title = it.kind + " " + it.serial + " · Stapleton IQ";
-    $("title").textContent = it.kind + " " + it.serial;
-    $("kind").textContent = it.label || "Sticker " + it.code;
-    const out = it.state === "out";
-    const b = $("banner"); b.hidden = false;
+  function banner() {
+    const it = data.item, out = it.state === "out", b = $("banner"), lo = data.last_out || {};
+    b.hidden = false;
     b.className = "banner " + (it.flag_damaged ? "dmg" : out ? "out" : "in");
     b.innerHTML = out
-      ? `<b>Signed out</b>To <span data-t="ev"></span> by <span data-t="by"></span>, ${GEAR.when(it.at)}.`
-      : `<b>In storage</b>${it.at ? "Returned by <span data-t=by></span>, " + GEAR.when(it.at) + "." : "Not signed out yet."}`;
-    GEAR.fill(b, { ev: it.event_name, by: it.by_name });
+      ? `<b>Gate ${"<span data-t=s></span>"} is signed out</b>To <span data-t="ev"></span>${lo.location ? " (<span data-t=loc></span>)" : ""} by <span data-t="by"></span>, ${GEAR.when(it.at)}.`
+      : `<b>Gate <span data-t=s></span> is in storage</b>${it.at ? "Returned by <span data-t=by></span>, " + GEAR.when(it.at) + "." : "Not signed out yet."}`;
+    GEAR.fill(b, { s: it.serial, ev: it.event_name, by: it.by_name, loc: lo.location });
     if (it.flag_damaged) {
       const p = document.createElement("div"); p.style.marginTop = "6px"; p.style.color = "var(--bad)"; p.style.fontWeight = "600";
       p.textContent = "Reported damaged" + (it.note ? ": " + it.note : ". See history below.");
       b.appendChild(p);
     }
+  }
 
-    // The form: sign out if it's in, return if it's out.
+  function draw() {
+    const it = data.item, out = it.state === "out", lo = data.last_out || {};
+    document.title = (out ? "Return " : "Sign out ") + it.kind + "s · Stapleton IQ";
+    $("title").textContent = (out ? "Return " : "Sign out ") + it.kind + "s";
+    $("kind").textContent = "You scanned gate " + it.serial + ". Tick any other gates below that go with it.";
+    $("histTitle").textContent = "History for gate " + it.serial;
+    banner();
+
     const action = out ? "back" : "out";
     const f = $("form"); f.hidden = false;
     $("formTitle").textContent = out ? "Return" : "Sign out";
@@ -101,54 +119,72 @@
     $("whoName").textContent = data.needs_name ? "(your name)" : (data.my_name || "you");
     $("nameBox").hidden = !data.needs_name;
     f.fullname.oninput = () => { $("whoName").textContent = f.fullname.value.trim() || "(your name)"; };
-    $("when").textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    $("itemsTitle").textContent = out ? "Units coming back (tick any others you're returning)" : "Units going out (tick any others you're taking)";
-    f.event.value = out ? (it.event_name || "") : (data.suggested_event || "");
-    $("eventList").replaceChildren(...data.event_names.map((n) => Object.assign(document.createElement("option"), { value: n })));
 
-    // This unit first and ticked, then the rest of the same kind.
+    // Event: IQ events, then names typed before, then "Not listed".
+    const names = [];
+    data.events.forEach((e) => { if (!names.includes(e.name)) names.push(e.name); });
+    data.event_names.forEach((n) => { if (!names.includes(n)) names.push(n); });
+    const sel = f.evsel;
+    sel.replaceChildren(Object.assign(document.createElement("option"), { value: "", textContent: "Pick the event…" }),
+      ...names.map((n) => Object.assign(document.createElement("option"), { value: n, textContent: n })),
+      Object.assign(document.createElement("option"), { value: OTHER, textContent: "Not listed: type it in" }));
+    const start = out ? (it.event_name || "") : (data.suggested_event || "");
+    if (start && !names.includes(start)) { sel.value = OTHER; f.evother.value = start; } else sel.value = start;
+    const venueOf = (n) => (data.events.find((e) => e.name === n) || {}).venue || "";
+    const syncEv = () => { $("evOtherBox").hidden = sel.value !== OTHER; };
+    sel.onchange = () => { syncEv(); if (sel.value === OTHER) f.evother.focus(); else if (!f.location.dataset.typed) f.location.value = venueOf(sel.value); };
+    syncEv();
+    f.location.oninput = () => { f.location.dataset.typed = "1"; };
+    f.location.value = out ? (lo.location || "") : venueOf(sel.value);
+
+    // Dates and batteries
+    f.dateout.value = out ? (lo.date_out || "") : today();
+    f.dateback.value = out ? today() : "";
+    f.dateout.disabled = out;
+    $("backLbl").textContent = out ? "Date back" : "Date back (expected, if known)";
+    $("batLbl").textContent = out ? "Batteries returned" + (lo.batteries != null ? " (" + lo.batteries + " went out)" : "") : "Batteries taken";
+    f.batteries.value = out ? (lo.batteries != null ? lo.batteries : 0) : 0;
+    f.querySelectorAll(".stepper button").forEach((b) => (b.onclick = () => {
+      f.batteries.value = Math.max(0, Math.min(500, (parseInt(f.batteries.value, 10) || 0) + Number(b.dataset.d)));
+    }));
+
+    $("itemsTitle").textContent = out ? "Gates coming back" : "Gates going out";
     const others = data.same_kind.map((o) => ({ ...o, usable: (o.state === "out") === out }));
-    // When returning, list units out at the same event first.
     others.sort((a, c) => (c.usable - a.usable) || ((c.event_name === it.event_name) - (a.event_name === it.event_name)));
-    const rows = [GEAR.row({ ...it, usable: true }, true, false)].concat(others.map((o) =>
+    const rows = [GEAR.row({ ...it, usable: true }, true, false, "The one you scanned")].concat(others.map((o) =>
       GEAR.row(o, false, !o.usable, o.usable ? null : (o.state === "out" ? "Already out: " + (o.event_name || "") + ", " + (o.by_name || "") : "Already in storage"))));
     $("items").replaceChildren(...rows.map((r) => r.el));
 
     f.onsubmit = async (e) => {
       e.preventDefault();
       const msg = $("msg"); msg.className = "msg"; msg.textContent = "";
-      const ev = f.event.value.trim();
-      if (!ev) { msg.className = "msg bad"; msg.textContent = "Type the event or location first."; f.event.focus(); return; }
+      const bad = (t, el) => { msg.className = "msg bad"; msg.textContent = t; if (el) el.focus(); };
+      const ev = sel.value === OTHER ? f.evother.value.trim() : sel.value;
+      if (!ev) return bad(sel.value === OTHER ? "Type the event or job name." : "Pick the event (or choose “Not listed” and type it in).", sel.value === OTHER ? f.evother : sel);
       const picked = rows.filter((r) => r.checked());
-      if (!picked.length) { msg.className = "msg bad"; msg.textContent = "Tick at least one unit."; return; }
-      const missingNote = picked.find((r) => r.value().condition === "damaged" && !r.value().note && !r.value().photo_b64);
-      if (missingNote) { msg.className = "msg bad"; msg.textContent = "Say what's wrong (or add a photo) for each damaged unit."; return; }
+      if (!picked.length) return bad("Tick at least one gate.");
+      if (picked.find((r) => r.value().condition === "damaged" && !r.value().note && !r.value().photo_b64)) return bad("Say what's wrong (or add a photo) for each damaged gate.");
+      if (f.dateout.value && f.dateback.value && f.dateback.value < f.dateout.value) return bad("Date back can't be before date out.", f.dateback);
       const fullname = data.needs_name ? f.fullname.value.trim() : "";
-      if (data.needs_name && fullname.length < 2) { msg.className = "msg bad"; msg.textContent = "Type your full name first. You only do this once."; f.fullname.focus(); return; }
+      if (data.needs_name && fullname.length < 2) return bad("Type your full name first. You only do this once.", f.fullname);
+      const batteries = parseInt(f.batteries.value, 10);
       $("go").disabled = true; $("go").textContent = "Saving…";
       try {
         if (fullname) { await IQ.rpc("web_set_my_name", { p_name: fullname }); data.needs_name = false; $("nameBox").hidden = true; }
-        const res = await IQ.rpc("web_gear_move", { p_action: action, p_event_name: ev, p_items: picked.map((r) => r.value()) });
-        const names = picked.map((r) => r.serial).join(", ");
+        const res = await IQ.rpc("web_gear_save", { p: {
+          action, event_name: ev, location: f.location.value.trim(), batteries: isNaN(batteries) ? null : batteries,
+          date_out: f.dateout.value || null, date_back: f.dateback.value || null, items: picked.map((r) => r.value()) } });
         const dmg = picked.filter((r) => r.value().condition === "damaged").length;
-        $("doneTxt").textContent = `${picked.length} ${it.kind}${picked.length > 1 ? "s" : ""} (${names}) ${action === "out" ? "signed out to" : "returned from"} ${ev} by ${res.by_name}.` +
-          (dmg ? ` ${dmg} marked damaged.` : "");
+        $("doneTxt").textContent = `${picked.length} ${it.kind}${picked.length > 1 ? "s" : ""} (${picked.map((r) => r.serial).join(", ")}) ` +
+          `${action === "out" ? "signed out to" : "returned from"} ${ev}` + (isNaN(batteries) ? "" : `, ${batteries} batter${batteries === 1 ? "y" : "ies"}`) +
+          `, by ${res.by_name}.` + (dmg ? ` ${dmg} marked damaged.` : "");
         $("sheetLink").href = "/gear-sheet?event=" + encodeURIComponent(ev);
         $("done").hidden = false; f.hidden = true;
-        await load(); drawBannerAndHistoryOnly();
+        await load(); banner(); history();
       } catch (err) {
-        msg.className = "msg bad"; msg.textContent = IQ.explain(err);
+        bad(/back_before_out/.test(err.message) ? "Date back can't be before date out." : /bad_date/.test(err.message) ? "Check the dates." : IQ.explain(err));
       } finally { $("go").disabled = false; $("go").textContent = out ? "Return" : "Sign out"; }
     };
-    history();
-  }
-
-  function drawBannerAndHistoryOnly() {
-    const it = data.item, out = it.state === "out", b = $("banner");
-    b.className = "banner " + (it.flag_damaged ? "dmg" : out ? "out" : "in");
-    b.innerHTML = out ? `<b>Signed out</b>To <span data-t="ev"></span> by <span data-t="by"></span>, ${GEAR.when(it.at)}.`
-                      : `<b>In storage</b>Returned by <span data-t="by"></span>, ${GEAR.when(it.at)}.`;
-    GEAR.fill(b, { ev: it.event_name, by: it.by_name });
     history();
   }
 

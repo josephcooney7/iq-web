@@ -21,8 +21,8 @@ Plain HTML and JavaScript, no build step. Every push to `main` deploys automatic
   `admin`, `manager`, `staff` can do everything; `client` sees only its own client's dashboards.
   A new login has no access until a profile row is added.
 - Pages only call the database functions in `supabase/iq_web_app_functions.sql`
-  (`web_me`, `web_units`, `web_unit_lines`, `web_dashboard`) and `supabase/iq_equipment.sql`
-  (`web_gear_item`, `web_gear_move`, `web_gear_list`, `web_gear_history`, `web_gear_photo`). Each checks the user's role.
+  (`web_me`, `web_units`, `web_unit_lines`, `web_dashboard`) and `supabase/iq_equipment.sql` + `iq_equipment_2.sql`
+  (`web_gear_item`, `web_gear_save`, `web_gear_move`, `web_gear_list`, `web_gear_history`, `web_gear_photo`). Each checks the user's role.
 - Equipment sign-outs are never edited or deleted. Who and when come from the login and the server clock.
 - The key in `js/app.js` is Supabase's publishable key, which is meant to be in web pages.
 - The Pi units are unchanged: they still talk to Supabase with their own device keys.
