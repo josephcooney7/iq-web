@@ -52,3 +52,15 @@ a.link { color: var(--accent); }
 .links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 15px; }
 .thumb { margin-top: 6px; max-width: 220px; border-radius: 8px; display: block; }
 [hidden] { display: none !important; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
+.two label, .two input { min-width: 0; }
+input[type=date], input[type=number] { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; min-height: 46px; }
+input:disabled { opacity: .7; }
+.stepper { display: flex; gap: 8px; align-items: stretch; max-width: 220px; }
+.stepper input { text-align: center; font-weight: 600; font-size: 20px; }
+.stepper button { min-width: 52px; font-size: 22px; padding: 0; }
+/* Tick boxes that are easy to see in light and dark mode */
+.item input[type=checkbox] { appearance: none; -webkit-appearance: none; margin: 0; border: 2px solid var(--ink-3); border-radius: 6px; background: transparent; display: grid; place-items: center; cursor: pointer; }
+.item input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+.item input[type=checkbox]:checked::after { content: ""; width: 6px; height: 12px; border: solid var(--accent-ink); border-width: 0 3px 3px 0; transform: translateY(-1px) rotate(45deg); }
+.item input[type=checkbox]:disabled { opacity: .5; cursor: default; }
