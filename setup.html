@@ -117,6 +117,23 @@ button:disabled { opacity: .5; cursor: default; }
   </div>
 
   <div class="panel">
+    <h2>Wait time (optional)</h2>
+    <label style="display:flex;font-size:15px;gap:10px;align-items:center">
+      <input type="checkbox" id="queueChk" style="width:22px;height:22px">
+      Line zone: a blue box over where people stand in line. The unit counts who's in it to estimate the wait. Drag its corners.
+    </label>
+    <div class="row" id="queueMore" style="display:none">
+      <button id="queueAdd">Add another line box</button>
+    </div>
+    <div class="seg" role="group" aria-label="What this unit does" style="margin-top:12px">
+      <button id="roleCounter" aria-pressed="true">Counts people through</button>
+      <button id="roleQueue" aria-pressed="false">Watches the line only</button>
+    </div>
+    <p class="hint" id="roleHint" style="margin:8px 2px 0">Use “Watches the line only” for a second unit that just sees the line, put on the same lane as the unit that counts.</p>
+    <p class="hint" id="inLineTxt" style="margin:8px 2px 0;display:none"></p>
+  </div>
+
+  <div class="panel">
     <h2 id="countTitle">Counted today</h2>
     <div class="counts"><div><small>In</small><span id="inN">–</span></div><div><small>Out</small><span id="outN">–</span></div><div><small>Net through</small><span id="netN">–</span></div></div>
     <div class="row"><button id="zeroBtn">Reset to zero</button></div>
@@ -133,7 +150,7 @@ button:disabled { opacity: .5; cursor: default; }
   const ONE = () => [{ p: [0.05, 0.5, 0.95, 0.5], dir: 1, count: "both" }];
   const TWO = () => [{ p: [0.05, 0.4, 0.95, 0.4], dir: 1, count: "in" }, { p: [0.05, 0.65, 0.95, 0.65], dir: 1, count: "out" }];
   let ready = false, state = null, unit = "IQ-01";
-  let lines = ONE(), zones = [], dirty = false, busy = false, drag = null;
+  let lines = ONE(), zones = [], queueZones = [], role = "counter", dirty = false, busy = false, drag = null;
   try { unit = localStorage.getItem("iq-unit") || unit; } catch {}
   const fromUrl = (location.pathname.match(/^\/u\/([A-Za-z0-9_-]{1,40})\/?$/) || [])[1] || new URLSearchParams(location.search).get("unit");
   if (fromUrl) unit = fromUrl.toUpperCase();
@@ -154,7 +171,8 @@ button:disabled { opacity: .5; cursor: default; }
     if (action === "save_lines") {
       const clean = lines.map((x) => ({ p: x.p.map((v) => Math.round(clamp(v) * 1000) / 1000), dir: x.dir > 0 ? 1 : -1, count: ["both", "in", "out"].includes(x.count) ? x.count : "both" }));
       const cleanZones = zones.map((z) => z.map((v) => Math.round(clamp(v) * 1000) / 1000));
-      return IQ.rpc("web_unit_lines", { p_label: l, p_action: "save_all", p_lines: { lines: clean, zones: cleanZones } });
+      const cleanQueue = queueZones.map((z) => z.map((v) => Math.round(clamp(v) * 1000) / 1000));
+      return IQ.rpc("web_unit_lines", { p_label: l, p_action: "save_all", p_lines: { lines: clean, zones: cleanZones, queue_zones: cleanQueue, role: role === "queue" ? "queue" : "counter" } });
     }
     const a = ["request_snapshot", "reset_counts"].includes(action) ? action : "get";
     return IQ.rpc("web_unit_lines", { p_label: l, p_action: a, p_lines: null });
@@ -165,7 +183,7 @@ button:disabled { opacity: .5; cursor: default; }
   function drawLines() {
     const svg = $("svg"), ov = $("overlay");
     svg.replaceChildren(); ov.replaceChildren();
-    lines.forEach((ln, i) => {
+    (role === "queue" ? [] : lines).forEach((ln, i) => {
       const [x1, y1, x2, y2] = ln.p, col = lines.length > 1 ? (i === 0 ? COLORS.in : COLORS.out) : (COLORS[ln.count] || COLORS.both);
       const L = document.createElementNS("http://www.w3.org/2000/svg", "line");
       L.setAttribute("x1", x1 * 1600); L.setAttribute("y1", y1 * 900); L.setAttribute("x2", x2 * 1600); L.setAttribute("y2", y2 * 900);
@@ -194,33 +212,42 @@ button:disabled { opacity: .5; cursor: default; }
         ov.appendChild(h);
       });
     });
-    zones.forEach((z, k) => {
-      const [x1, y1, x2, y2] = z;
+    const box = (list, kind, k, z) => {
+      const [x1, y1, x2, y2] = z, line = kind === "queue";
       const R = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       R.setAttribute("x", Math.min(x1, x2) * 1600); R.setAttribute("y", Math.min(y1, y2) * 900);
       R.setAttribute("width", Math.abs(x2 - x1) * 1600); R.setAttribute("height", Math.abs(y2 - y1) * 900);
-      R.setAttribute("fill", "rgba(120,130,140,.35)"); R.setAttribute("stroke", "#ffffff");
+      R.setAttribute("fill", line ? "rgba(40,120,220,.28)" : "rgba(120,130,140,.35)"); R.setAttribute("stroke", "#ffffff");
       R.setAttribute("stroke-width", "3"); R.setAttribute("stroke-dasharray", "10 6"); R.setAttribute("vector-effect", "non-scaling-stroke");
       svg.appendChild(R);
-      const t = document.createElement("div"); t.className = "label"; t.style.background = "#5b6670";
+      const col = line ? "#1f6fd1" : "#5b6670";
+      const t = document.createElement("div"); t.className = "label"; t.style.background = col;
       t.style.left = ((x1 + x2) / 2) * 100 + "%"; t.style.top = ((y1 + y2) / 2) * 100 + "%";
-      t.textContent = "IGNORE"; ov.appendChild(t);
+      t.textContent = line ? "LINE" : "IGNORE"; ov.appendChild(t);
       [0, 1].forEach((end) => {
-        const h = document.createElement("div"); h.className = "handle"; h.style.background = "#5b6670";
+        const h = document.createElement("div"); h.className = "handle"; h.style.background = col;
         h.style.borderRadius = "6px";
         h.style.left = z[end * 2] * 100 + "%"; h.style.top = z[end * 2 + 1] * 100 + "%";
-        h.setAttribute("aria-label", `Ignore zone corner ${end + 1}`);
-        h.addEventListener("pointerdown", (ev) => { ev.preventDefault(); drag = { zone: k, end }; $("frame").setPointerCapture(ev.pointerId); });
+        h.setAttribute("aria-label", `${line ? "Line" : "Ignore"} zone ${k + 1} corner ${end + 1}`);
+        h.addEventListener("pointerdown", (ev) => { ev.preventDefault(); drag = { box: list, k, end }; $("frame").setPointerCapture(ev.pointerId); });
         ov.appendChild(h);
       });
-    });
+    };
+    zones.forEach((z, k) => box(zones, "ignore", k, z));
+    queueZones.forEach((z, k) => box(queueZones, "queue", k, z));
+    $("queueChk").checked = queueZones.length > 0;
+    $("queueMore").style.display = queueZones.length > 0 && queueZones.length < 4 ? "flex" : "none";
+    $("roleCounter").setAttribute("aria-pressed", String(role !== "queue"));
+    $("roleQueue").setAttribute("aria-pressed", String(role === "queue"));
     $("zoneChk").checked = zones.length > 0;
     const two = lines.length > 1;
     $("backWrap").style.display = two ? "flex" : "none";
     $("backChk").checked = two && lines[0].count === "both";
     $("modeOne").setAttribute("aria-pressed", String(!two));
     $("modeTwo").setAttribute("aria-pressed", String(two));
-    $("hint").textContent = two
+    $("hint").textContent = role === "queue"
+      ? "This unit only watches the line. Drag the corners of the blue box over where people wait."
+      : two
       ? "Green line counts people coming IN, orange counts people going OUT. Anyone crossing a line the wrong way is ignored. Drag the dots to move the ends."
       : "Drag the dots at each end of the red line. Put it across the walkway, where everyone has to pass.";
     $("saveBtn").disabled = !dirty || busy || !ready;
@@ -234,6 +261,11 @@ button:disabled { opacity: .5; cursor: default; }
     if (state.snapshot) { $("snap").src = "data:image/jpeg;base64," + state.snapshot; $("snap").hidden = false; $("empty").hidden = true; }
     if (!dirty && Array.isArray(state.lines) && state.lines.length) lines = state.lines.map((l) => ({ p: l.p.map(Number), dir: Number(l.dir), count: l.count }));
     if (!dirty && Array.isArray(state.zones)) zones = state.zones.map((z) => z.map(Number));
+    if (!dirty && Array.isArray(state.queue_zones)) queueZones = state.queue_zones.map((z) => z.map(Number));
+    if (!dirty && state.role) role = state.role === "queue" ? "queue" : "counter";
+    const showLine = queueZones.length > 0 && state.in_line_now != null;
+    $("inLineTxt").style.display = showLine ? "block" : "none";
+    if (showLine) $("inLineTxt").textContent = "In line now: about " + Number(state.in_line_now).toLocaleString() + " people (last minute's average).";
     $("inN").textContent = Number(state.today_in || 0).toLocaleString();
     $("outN").textContent = Number(state.today_out || 0).toLocaleString();
     $("netN").textContent = Math.max(0, Number(state.today_in || 0) - Number(state.today_out || 0)).toLocaleString();
@@ -289,7 +321,7 @@ button:disabled { opacity: .5; cursor: default; }
   frame.addEventListener("pointermove", (ev) => {
     if (!drag) return;
     const r = frame.getBoundingClientRect();
-    const pts = drag.zone !== undefined ? zones[drag.zone] : lines[drag.i].p;
+    const pts = drag.box ? drag.box[drag.k] : lines[drag.i].p;
     pts[drag.end * 2] = clamp((ev.clientX - r.left) / r.width);
     pts[drag.end * 2 + 1] = clamp((ev.clientY - r.top) / r.height);
     dirty = true; say(""); drawLines();
@@ -301,6 +333,10 @@ button:disabled { opacity: .5; cursor: default; }
   $("modeOne").addEventListener("click", () => { if (lines.length > 1) change(() => { const d = lines[0].dir; lines = ONE(); lines[0].dir = d; }); });
   $("modeTwo").addEventListener("click", () => { if (lines.length === 1) change(() => { const d = lines[0].dir; lines = TWO(); lines.forEach((l) => (l.dir = d)); }); });
   $("zoneChk").addEventListener("change", (e) => change(() => { zones = e.target.checked ? [[0.05, 0.1, 0.25, 0.45]] : []; }));
+  $("queueChk").addEventListener("change", (e) => change(() => { queueZones = e.target.checked ? [[0.3, 0.15, 0.95, 0.85]] : []; if (!e.target.checked) role = "counter"; }));
+  $("queueAdd").addEventListener("click", () => { if (queueZones.length < 4) change(() => queueZones.push([0.05, 0.55, 0.35, 0.95])); });
+  $("roleCounter").addEventListener("click", () => { if (role !== "counter") change(() => { role = "counter"; }); });
+  $("roleQueue").addEventListener("click", () => { if (role !== "queue") change(() => { role = "queue"; if (!queueZones.length) queueZones = [[0.1, 0.15, 0.9, 0.85]]; }); });
   $("backChk").addEventListener("change", (e) => change(() => { if (lines.length > 1) lines[0].count = e.target.checked ? "both" : "in"; }));
   $("flipBtn").addEventListener("click", () => change(() => lines.forEach((l) => (l.dir = -l.dir))));
   $("resetBtn").addEventListener("click", () => change(() => { lines = lines.length > 1 ? TWO() : ONE(); }));
