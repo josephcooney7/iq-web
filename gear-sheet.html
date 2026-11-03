@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IQ Sign-Out Sheet</title>
+<meta name="description" content="Printable equipment sign-out sheet for one event, filled in from the QR scans.">
+<meta name="theme-color" content="#0d5f7a">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="stylesheet" href="/css/gear.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+main { max-width: 820px; }
+.paper { background: #fff; color: #12202b; border-radius: 10px; padding: 28px 24px; margin-top: 14px; border: 1px solid var(--line); }
+.paper + .paper { margin-top: 20px; }
+.paper h3 { font-family: var(--f-display); font-size: 30px; text-align: center; margin: 0 0 18px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 18px; }
+.fields.three { grid-template-columns: 1fr 1fr 1fr; }
+.fld small { display: block; font-size: 12px; color: #4a5864; }
+.fld div { border-bottom: 1px solid #9aa6af; min-height: 26px; padding: 3px 0; font-size: 15px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #4a5864; border-bottom: 2px solid #12202b; padding: 6px; }
+td { border-bottom: 1px solid #c9d1d7; padding: 8px 6px; vertical-align: top; }
+td.box { width: 54px; text-align: center; font-size: 18px; font-weight: 700; }
+td.ser { font-weight: 600; width: 110px; }
+.dmg { color: #b3261e; font-weight: 600; }
+.damage { margin-top: 18px; }
+.damage small { font-size: 12px; color: #4a5864; }
+.damage div { border: 1px solid #9aa6af; border-radius: 4px; min-height: 60px; padding: 8px; font-size: 14px; }
+.foot { text-align: center; font-size: 12px; color: #4a5864; margin-top: 16px; }
+@media (max-width: 560px) { .fields, .fields.three { grid-template-columns: 1fr; } .paper { padding: 18px 12px; } }
+@media print {
+  .iq-bar, .noprint { display: none !important; }
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+  .paper { border: 0; padding: 0; margin: 0; break-after: page; }
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="noprint">
+    <h1>Sign-out sheet</h1>
+    <p class="sub">Filled in from the QR scans for one event. To keep a PDF copy (for Dropbox), tap Print, then choose “Save as PDF” (on iPhone: Share, then Save to Files).</p>
+    <div class="links" style="align-items:center">
+      <select id="ev" style="width:auto;max-width:100%"></select>
+      <button class="primary" type="button" onclick="print()">Print / save PDF</button>
+      <a class="link" href="/gear">Back to equipment</a>
+    </div>
+  </div>
+  <div id="sheets"></div>
+  <p class="msg bad" id="err"></p>
+</main>
+<script src="/js/supabase.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/gear.js"></script>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const bar = IQ.topbar("gear");
+  try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  const params = new URLSearchParams(location.search);
+  let list;
+  try { list = await IQ.rpc("web_gear_list"); } catch (e) { $("err").textContent = IQ.explain(e); return; }
+  const sel = $("ev");
+  const names = list.event_names.slice();
+  const want = params.get("event");
+  if (want && !names.includes(want)) names.unshift(want);
+  if (!names.length) { $("err").textContent = "Nothing has been signed out yet."; return; }
+  names.forEach((n) => sel.appendChild(Object.assign(document.createElement("option"), { value: n, textContent: n })));
+  sel.value = want || names[0];
+  sel.onchange = () => { history.replaceState(null, "", "?event=" + encodeURIComponent(sel.value)); draw(); };
+  draw();
+
+  async function draw() {
+    const ev = sel.value;
+    let moves;
+    try { moves = await IQ.rpc("web_gear_history", { p_event_name: ev }); } catch (e) { $("err").textContent = IQ.explain(e); return; }
+    const d = (t) => t ? new Date(t).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "numeric" }) : "";
+    const uniq = (a) => [...new Set(a.filter(Boolean))].join(", ");
+    // One page per kind of equipment (OpenGate, X-ray, ...), listing every unit of that kind.
+    const kinds = [...new Set(list.items.map((i) => i.kind))].filter((k) => moves.some((m) => m.kind === k));
+    $("sheets").replaceChildren(...kinds.map((kind) => {
+      const mv = moves.filter((m) => m.kind === kind);
+      const outs = mv.filter((m) => m.action === "out"), backs = mv.filter((m) => m.action === "back");
+      const units = list.items.filter((i) => i.kind === kind);
+      const p = document.createElement("section"); p.className = "paper";
+      p.innerHTML = `
+        <h3 data-t="title"></h3>
+        <div class="fields">
+          <div class="fld"><small>Taken out by</small><div data-t="by"></div></div>
+          <div class="fld"><small>Event / location</small><div data-t="ev"></div></div>
+        </div>
+        <div class="fields three">
+          <div class="fld"><small>Date out</small><div data-t="dout"></div></div>
+          <div class="fld"><small>Date back</small><div data-t="dback"></div></div>
+          <div class="fld"><small>Returned by</small><div data-t="rby"></div></div>
+        </div>
+        <table><thead><tr><th>Out</th><th>Serial #</th><th>Back</th><th>Condition / notes</th></tr></thead><tbody></tbody></table>
+        <div class="damage"><small>Damage or issues to report</small><div data-t="dmg"></div></div>
+        <p class="foot">Made by Stapleton IQ from QR scans · printed <span data-t="now"></span></p>`;
+      GEAR.fill(p, {
+        title: kind + " Sign-Out Sheet", by: uniq(outs.map((m) => m.by_name)), ev,
+        dout: uniq(outs.map((m) => d(m.at))), dback: uniq(backs.map((m) => d(m.at))), rby: uniq(backs.map((m) => m.by_name)),
+        dmg: mv.filter((m) => m.condition === "damaged").map((m) => m.serial + ": " + (m.note || "damaged (photo in IQ)")).join("\n"),
+        now: new Date().toLocaleString()
+      });
+      p.querySelector(".damage div").style.whiteSpace = "pre-line";
+      const tb = p.querySelector("tbody");
+      units.forEach((u) => {
+        const um = mv.filter((m) => m.code === u.code);
+        const wentOut = um.some((m) => m.action === "out");
+        const lastOut = um.filter((m) => m.action === "out").pop();
+        const cameBack = lastOut && um.some((m) => m.action === "back" && m.at >= lastOut.at);
+        const notes = um.filter((m) => m.note || m.condition === "damaged")
+          .map((m) => (m.action === "out" ? "Out: " : "Back: ") + (m.condition === "damaged" ? "DAMAGED " : "") + (m.note || "")).join(" · ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="box">${wentOut ? "✓" : ""}</td><td class="ser" data-t="s"></td><td class="box">${cameBack ? "✓" : wentOut ? '<span class="dmg">✗</span>' : ""}</td><td data-t="n"></td>`;
+        GEAR.fill(tr, { s: u.serial, n: notes || (wentOut && !cameBack ? "Not returned yet" : wentOut ? "OK" : "") });
+        if (um.some((m) => m.condition === "damaged")) tr.querySelector("td:last-child").className = "dmg";
+        tb.appendChild(tr);
+      });
+      return p;
+    }));
+  }
+})();
+</script>
+</body>
+</html>

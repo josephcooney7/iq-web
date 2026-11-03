@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IQ Equipment</title>
+<meta name="description" content="Where every piece of equipment is, what's still missing from an event, and each unit's history.">
+<meta name="theme-color" content="#0d5f7a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stapleton IQ">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="stylesheet" href="/css/gear.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+.list { display: grid; gap: 8px; }
+.list a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); text-decoration: none; }
+.list a .name { flex: 1; font-weight: 600; }
+.list a .name small { display: block; font-weight: 400; color: var(--ink-3); font-size: 13px; }
+.big-num { font-family: var(--f-display); font-size: 40px; line-height: 1; }
+.check { display: flex; gap: 20px; margin: 4px 0 12px; }
+.check div small { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+.missing { color: var(--bad); } .back { color: var(--good); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Equipment</h1>
+  <p class="sub">Scan a unit's QR sticker to sign it out or return it. This page shows where everything is.</p>
+
+  <div class="panel">
+    <h2>Load-out check</h2>
+    <label class="f" style="margin-top:0">Event
+      <select id="ev"><option value="">Pick an event…</option></select>
+    </label>
+    <div id="checkOut" hidden>
+      <div class="check" style="margin-top:12px">
+        <div><span class="big-num" id="nOut">0</span><small>Went out</small></div>
+        <div class="back"><span class="big-num" id="nBack">0</span><small>Back</small></div>
+        <div class="missing"><span class="big-num" id="nMiss">0</span><small>Still missing</small></div>
+      </div>
+      <div class="list" id="checkList"></div>
+      <div class="links"><a class="link" id="sheetLink" href="#">Sign-out sheet for this event (print or save as PDF)</a></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>All equipment</h2>
+    <div class="list" id="all"></div>
+    <div class="links"><a class="link" href="/gear-stickers">Print QR stickers</a></div>
+  </div>
+  <p class="msg bad" id="err"></p>
+</main>
+<script src="/js/supabase.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/gear.js"></script>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const bar = IQ.topbar("gear");
+  try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  let data;
+  try { data = await IQ.rpc("web_gear_list"); } catch (e) { $("err").textContent = IQ.explain(e); return; }
+
+  const line = (it, sub, tagCls, tagTxt) => {
+    const a = document.createElement("a"); a.href = "/g/" + encodeURIComponent(it.code);
+    a.innerHTML = `<span class="name"><span data-t="n"></span><small data-t="s"></small></span><span class="tag ${tagCls}">${tagTxt}</span>`;
+    GEAR.fill(a, { n: it.kind + " " + it.serial, s: sub }); return a;
+  };
+  $("all").replaceChildren(...data.items.map((it) => it.state === "out"
+    ? line(it, (it.event_name || "") + " · " + (it.by_name || "") + " · " + GEAR.when(it.at), it.flag_damaged ? "dmg" : "out", it.flag_damaged ? "Out · damaged" : "Out")
+    : line(it, it.at ? "Back " + GEAR.when(it.at) : "In storage", it.flag_damaged ? "dmg" : "in", it.flag_damaged ? "Damaged" : "In")));
+
+  const sel = $("ev");
+  data.event_names.forEach((n) => sel.appendChild(Object.assign(document.createElement("option"), { value: n, textContent: n })));
+  const saved = (() => { try { return localStorage.getItem("iq-gear-event"); } catch { return null; } })();
+  if (saved && data.event_names.includes(saved)) sel.value = saved;
+  else if (data.event_names.length) sel.value = data.event_names[0];
+  sel.onchange = check; check();
+
+  async function check() {
+    const ev = sel.value; $("checkOut").hidden = !ev; if (!ev) return;
+    try { localStorage.setItem("iq-gear-event", ev); } catch {}
+    $("sheetLink").href = "/gear-sheet?event=" + encodeURIComponent(ev);
+    let moves;
+    try { moves = await IQ.rpc("web_gear_history", { p_event_name: ev }); } catch (e) { $("err").textContent = IQ.explain(e); return; }
+    // For each unit that went out to this event: is it back since?
+    const per = new Map();
+    moves.forEach((m) => {
+      const p = per.get(m.code) || { code: m.code, kind: m.kind, serial: m.serial, out: null, back: null, dmg: false };
+      if (m.action === "out") { p.out = m; p.back = null; } else if (p.out) p.back = m;
+      if (m.condition === "damaged") p.dmg = true;
+      per.set(m.code, p);
+    });
+    const rows = [...per.values()].filter((p) => p.out);
+    const miss = rows.filter((p) => !p.back), back = rows.filter((p) => p.back);
+    $("nOut").textContent = rows.length; $("nBack").textContent = back.length; $("nMiss").textContent = miss.length;
+    $("checkList").replaceChildren(
+      ...miss.map((p) => line(p, "Signed out by " + p.out.by_name + " · " + GEAR.when(p.out.at), "dmg", "Missing")),
+      ...back.map((p) => line(p, "Returned by " + p.back.by_name + " · " + GEAR.when(p.back.at) + (p.dmg ? " · damaged" : ""), p.dmg ? "dmg" : "in", p.dmg ? "Back · damaged" : "Back")));
+  }
+})();
+</script>
+</body>
+</html>

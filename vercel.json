@@ -4,6 +4,10 @@
     {
       "source": "/u/:unit",
       "destination": "/setup"
+    },
+    {
+      "source": "/g/:code",
+      "destination": "/scan"
     }
   ],
   "headers": [

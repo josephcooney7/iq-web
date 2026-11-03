@@ -32,6 +32,7 @@ window.IQ = (() => {
       <span class="iq-links">
         <a href="/dashboard" ${active === "dashboard" ? 'aria-current="page"' : ""}>Dashboard</a>
         <a href="/setup" data-staff ${active === "setup" ? 'aria-current="page"' : ""}>Setup</a>
+        <a href="/gear" data-staff ${active === "gear" ? 'aria-current="page"' : ""}>Equipment</a>
       </span>
       <button type="button" class="iq-out" hidden>Sign out</button>`;
     document.body.prepend(bar);
@@ -52,6 +53,7 @@ window.IQ = (() => {
           <form class="iq-card" novalidate>
             <div class="iq-mark">Stapleton IQ</div>
             <h1>${titles[view]}</h1>
+            ${view === "signup" ? `<label>Full name<input name="fullname" type="text" autocomplete="name" maxlength="80" required></label>` : ""}
             ${view !== "newpass" ? `<label>Email<input name="email" type="email" autocomplete="email" required></label>` : ""}
             ${view !== "forgot" ? `<label>Password<input name="password" type="password" minlength="8"
                 autocomplete="${view === "signin" ? "current-password" : "new-password"}" required></label>` : ""}
@@ -74,8 +76,10 @@ window.IQ = (() => {
               if (error) throw error;
               wrap.remove(); resolve();
             } else if (view === "signup") {
+              const fullName = f.fullname ? f.fullname.value.trim() : "";
+              if (fullName.length < 2) throw new Error("Type your full name.");
               if (password.length < 8) throw new Error("Use at least 8 characters for the password.");
-              const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+              const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: fullName }, emailRedirectTo: location.origin + location.pathname } });
               if (error) throw error;
               if (data.session) { wrap.remove(); resolve(); return; }
               view = "signin"; draw("Check your email and tap the link to confirm, then sign in here.", "good");
