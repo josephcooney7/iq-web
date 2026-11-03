@@ -25,9 +25,11 @@ DEFAULTS = {
     "min_score": 0.5,        # how sure the AI must be that it's a person
     "max_jump": 0.12,        # furthest a person can move between frames (fraction of width)
     "max_missed": 8,         # frames a person can vanish (e.g. behind someone) before we forget them
-    "dead_zone": 0.05,
+    "dead_zone": 0.05,       # band either side of the line; a person must fully clear it to count
     "zones": [],             # ignore boxes [x1, y1, x2, y2]: nobody inside them is counted
-    "lines": None,           # set from the phone page; None = one line straight across at line_y       # band either side of the line; a person must fully clear it to count
+    "lines": None,           # set from the phone page; None = one line straight across at line_y
+    "queue_zones": [],       # line-zone boxes [x1, y1, x2, y2]: people inside are "in line" (wait times)
+    "role": "counter",       # "queue" = this unit only watches the line and sends no crossings
     "fps": 15,
     "flip": True,            # camera board mounts upside down in the case
     "model": None,           # path to a .hef; picked automatically when empty
@@ -170,6 +172,123 @@ class LineCounter:
         return crossings
 
 
+# ---------------------------------------------------------------- wait times
+class QueueWatcher:
+    """Counts people standing inside the line-zone boxes (queue_zones) on every
+    frame and sends, once a minute, the average and the most seen. With the
+    counting line's people-per-minute this gives an estimated wait in the cloud.
+    Only numbers are sent. Does nothing at all while no line zone is set.
+    Minutes are kept in a small local database so hotspot drop-outs lose nothing."""
+
+    UPLOAD_EVERY_S = 30
+
+    def __init__(self, zones=None, config_path=None, buffer_path=None, upload=True):
+        import sqlite3
+        import threading
+        self.lock = threading.Lock()
+        self.set_zones(zones)
+        self.minute, self.total, self.most, self.frames = None, 0, 0, 0
+        self.url = None
+        if upload:
+            cfg_path = config_path or os.path.expanduser("~/stapleton-iq/config.json")
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+            self.url = cfg["supabase_url"].rstrip("/") + "/rest/v1/rpc/ingest_queue"
+            self.key = cfg["anon_key"]
+            self.device_id, self.device_key = cfg["device_id"], cfg["device_key"]
+        path = buffer_path or os.path.expanduser("~/stapleton-iq/queue.db")
+        if path != ":memory:":
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+        self.db.execute("""create table if not exists minutes (
+            minute text primary key, avg real not null, most int not null, frames int not null,
+            version int not null default 0, sent_version int not null default -1)""")
+        self.stop_event = threading.Event()
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.last_error = None
+
+    def set_zones(self, zones):
+        boxes = []
+        for z in zones or []:
+            x1, y1, x2, y2 = (float(v) for v in z)
+            boxes.append((min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)))
+        with self.lock:
+            self.zones = boxes
+
+    def in_line(self, points):
+        return sum(1 for x, y in points
+                   if any(x0 <= x <= x1 and y0 <= y <= y1 for x0, y0, x1, y1 in self.zones))
+
+    def observe(self, points, now=None):
+        """points: person centres (0..1) for one frame, ignore zones already removed."""
+        if not self.zones:
+            return
+        minute = time.strftime("%Y-%m-%dT%H:%M:00Z", time.gmtime(now if now is not None else time.time()))
+        n = self.in_line(points)
+        with self.lock:
+            if minute != self.minute:
+                self._save_locked()
+                self.minute, self.total, self.most, self.frames = minute, 0, 0, 0
+            self.total += n
+            self.most = max(self.most, n)
+            self.frames += 1
+
+    def _save_locked(self):
+        if not self.minute or not self.frames:
+            return
+        self.db.execute(
+            """insert into minutes (minute, avg, most, frames, version) values (?, ?, ?, ?, 1)
+               on conflict(minute) do update set avg = excluded.avg, most = excluded.most,
+               frames = excluded.frames, version = version + 1""",
+            (self.minute, round(self.total / self.frames, 2), self.most, self.frames))
+
+    def upload_once(self):
+        import urllib.request
+        with self.lock:
+            self._save_locked()          # the minute so far; it is resent when complete
+            rows = self.db.execute("""select minute, avg, most, frames, version from minutes
+                                      where version <> sent_version order by minute limit 500""").fetchall()
+        if not rows or not self.url:
+            return 0
+        body = json.dumps({"p_device_id": self.device_id, "p_device_key": self.device_key,
+                           "p_samples": [{"minute": m, "avg": a, "max": mx, "frames": f}
+                                         for m, a, mx, f, _ in rows]}).encode()
+        req = urllib.request.Request(self.url, data=body, method="POST", headers={
+            "apikey": self.key, "Authorization": "Bearer " + self.key,
+            "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp.read()
+        with self.lock:
+            self.db.executemany("update minutes set sent_version = ? where minute = ?",
+                                [(v, m) for m, _, _, _, v in rows])
+            self.db.execute("delete from minutes where version = sent_version and minute < ?",
+                            (time.strftime("%Y-%m-%dT%H:%M:00Z", time.gmtime(time.time() - 3 * 86400)),))
+        return len(rows)
+
+    def _loop(self):
+        delay = self.UPLOAD_EVERY_S
+        while not self.stop_event.is_set():
+            try:
+                self.upload_once()
+                self.last_error, delay = None, self.UPLOAD_EVERY_S
+            except Exception as e:       # never let wait-time problems stop counting
+                if str(e) != self.last_error:
+                    log(f"line-zone upload failed, will retry: {e}")
+                self.last_error, delay = str(e), min(delay * 2, 300)
+            self.stop_event.wait(delay)
+
+    def start(self):
+        self.thread.start()
+        return self
+
+    def stop(self):
+        self.stop_event.set()
+        try:
+            self.upload_once()
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------- hardware
 def open_camera(settings, with_snap=False):
     from picamera2 import Picamera2
@@ -242,7 +361,7 @@ class UnitSync:
     """Every 15 s asks the cloud for this unit's counting-line settings. When the
     phone setup page asks for a picture, sends ONE still frame (only then)."""
 
-    def __init__(self, counter, settings, settings_path, config_path=None):
+    def __init__(self, counter, settings, settings_path, config_path=None, queue=None):
         import threading
         cfg_path = config_path or os.path.expanduser("~/stapleton-iq/config.json")
         with open(cfg_path) as f:
@@ -251,6 +370,7 @@ class UnitSync:
         self.key = cfg["anon_key"]
         self.device_id, self.device_key = cfg["device_id"], cfg["device_key"]
         self.counter, self.settings, self.settings_path = counter, settings, settings_path
+        self.queue = queue
         self.version = settings.get("settings_version")
         self.latest_frame = None
         self.stop_event = threading.Event()
@@ -288,11 +408,15 @@ class UnitSync:
             return
         line_y, direction, lines = float(r["line_y"]), r["in_direction"], r.get("lines")
         zones = r.get("zones") or []
+        queue_zones = r.get("queue_zones") or []
+        role = r.get("role") or "counter"
         self.counter.set_lines(lines, line_y, direction)
         self.counter.set_zones(zones)
+        if self.queue:
+            self.queue.set_zones(queue_zones)
         self.version = r["version"]
         changes = dict(line_y=line_y, in_direction=direction, lines=lines, zones=zones,
-                       settings_version=self.version)
+                       queue_zones=queue_zones, role=role, settings_version=self.version)
         self.settings.update(changes)
         try:
             saved = {}
@@ -305,7 +429,8 @@ class UnitSync:
         except OSError as e:
             log(f"could not save settings: {e}")
         log(f"new counting lines from phone: {len(self.counter.lines)} line(s), "
-            f"{len(self.counter.zones)} ignore zone(s), version {self.version}")
+            f"{len(self.counter.zones)} ignore zone(s), {len(queue_zones)} line zone(s), "
+            f"{'line only' if role == 'queue' else 'counting'}, version {self.version}")
 
     def _loop(self):
         while not self.stop_event.is_set():
@@ -376,9 +501,14 @@ def cmd_run(settings, upload, settings_path=DEFAULT_SETTINGS):
     if not model:
         sys.exit("No AI model found. Run: sudo apt install hailo-all  (then reboot)")
     counter = LineCounter(settings)
+    queue = None
     if upload:
         try:
-            sync = UnitSync(counter, settings, settings_path).start()
+            queue = QueueWatcher(settings.get("queue_zones")).start()
+        except Exception as e:
+            log(f"wait times not available: {e}")
+        try:
+            sync = UnitSync(counter, settings, settings_path, queue=queue).start()
         except Exception as e:
             log(f"phone setup not available: {e}")
     cam = open_camera(settings)
@@ -390,7 +520,12 @@ def cmd_run(settings, upload, settings_path=DEFAULT_SETTINGS):
             frame = cam.capture_array("main")
             if sync:
                 sync.latest_frame = frame
-            for direction in counter.update(det.people(frame)):
+            people = det.people(frame)
+            if queue and queue.zones:
+                queue.observe([p for p in people if not counter._ignored(*p)])
+            for direction in counter.update(people):
+                if settings.get("role") == "queue":
+                    continue             # line-only unit: another unit counts the crossings
                 log(f"crossing: {direction}")
                 if up:
                     up.crossing(direction)
@@ -406,6 +541,8 @@ def cmd_run(settings, upload, settings_path=DEFAULT_SETTINGS):
         det.close()
         if sync:
             sync.stop()
+        if queue:
+            queue.stop()
         if up:
             up.stop()
         log("stopped")
@@ -438,6 +575,19 @@ def cmd_selftest(settings):
             total[d] += 1
     print("expected", expected, "counted", total)
     ok = abs(total["in"] - expected["in"]) <= 3 and abs(total["out"] - expected["out"]) <= 3
+    # Line zone: 6 people in the box, 2 outside; over two minutes.
+    q = QueueWatcher([[0.2, 0.2, 0.6, 0.8]], buffer_path=":memory:", upload=False)
+    t0 = 1_800_000_000 - (1_800_000_000 % 60)
+    for f in range(120):
+        inside = [(0.3 + 0.01 * k, 0.5) for k in range(6 if f < 60 else 3)]
+        q.observe(inside + [(0.9, 0.5), (0.1, 0.1)], now=t0 + f)
+    q.upload_once()
+    rows = q.db.execute("select avg, most from minutes order by minute").fetchall()
+    print("line zone minutes (avg, most):", rows)
+    ok = ok and rows == [(6.0, 6), (3.0, 3)]
+    idle = QueueWatcher([], buffer_path=":memory:", upload=False)
+    idle.observe([(0.5, 0.5)])
+    ok = ok and idle.db.execute("select count(*) from minutes").fetchone()[0] == 0
     print("PASS" if ok else "FAIL")
     return ok
 
