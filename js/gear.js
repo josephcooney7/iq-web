@@ -1,5 +1,7 @@
 /* Shared bits for the equipment pages. */
 window.GEAR = (() => {
+  // Other gear that goes out with the gates, ticked on each sign-out / return.
+  const EXTRAS = ["Table", "Handheld wand", "Baskets"];
   function when(t) {
     if (!t) return "";
     const d = new Date(t), now = new Date();
@@ -81,6 +83,7 @@ window.GEAR = (() => {
   function batchText(b) {
     if (!b) return "";
     return [b.location, b.batteries != null ? b.batteries + " batter" + (b.batteries === 1 ? "y" : "ies") : "",
+      (b.extras && b.extras.length) ? b.extras.join(", ") : "",
       b.date_out ? "out " + day(b.date_out) : "", b.date_back ? "back " + day(b.date_back) : ""].filter(Boolean).join(" · ");
   }
 
@@ -107,5 +110,5 @@ window.GEAR = (() => {
     }));
   }
 
-  return { when, fill, row, history, shrink, day, batchText };
+  return { EXTRAS, when, fill, row, history, shrink, day, batchText };
 })();
