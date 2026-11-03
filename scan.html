@@ -141,7 +141,7 @@
     f.dateout.value = out ? (lo.date_out || "") : today();
     f.dateback.value = out ? today() : "";
     f.dateout.disabled = out;
-    $("backLbl").textContent = out ? "Date back" : "Date back (expected, if known)";
+    $("backLbl").textContent = out ? "Date back" : "Date back (expected, if you know it)";
     $("batLbl").textContent = out ? "Batteries returned" + (lo.batteries != null ? " (" + lo.batteries + " went out)" : "") : "Batteries taken";
     f.batteries.value = out ? (lo.batteries != null ? lo.batteries : 0) : 0;
     f.querySelectorAll(".stepper button").forEach((b) => (b.onclick = () => {
