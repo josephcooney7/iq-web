@@ -104,6 +104,7 @@ td.ser { font-weight: 600; width: 110px; }
           <div class="fld"><small>Batteries back</small><div data-t="bback"></div></div>
         </div>
         <table><thead><tr><th>Out</th><th>Serial #</th><th>Back</th><th>Condition / notes</th></tr></thead><tbody></tbody></table>
+        <table style="margin-top:14px"><thead><tr><th>Out</th><th>Other gear</th><th>Back</th><th>Notes</th></tr></thead><tbody class="xrows"></tbody></table>
         <div class="damage"><small>Damage or issues to report</small><div data-t="dmg"></div></div>
         <p class="foot">Made by Stapleton IQ from QR scans · printed <span data-t="now"></span></p>`;
       // Each sign-out / return sheet counted once for batteries.
@@ -135,6 +136,16 @@ td.ser { font-weight: 600; width: 110px; }
         GEAR.fill(tr, { s: u.serial, n: notes || (wentOut && !cameBack ? "Not returned yet" : wentOut ? "OK" : "") });
         if (um.some((m) => m.condition === "damaged")) tr.querySelector("td:last-child").className = "dmg";
         tb.appendChild(tr);
+      });
+      // Other gear on this event's sheets: Table, Handheld wand, Baskets.
+      const xo = new Set(), xb = new Set();
+      sh.forEach((b) => (b.extras || []).forEach((x) => (b.action === "out" ? xo : xb).add(x)));
+      const xtb = p.querySelector("tbody.xrows");
+      [...new Set([...GEAR.EXTRAS, ...xo])].forEach((x) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="box">${xo.has(x) ? "✓" : ""}</td><td class="ser" data-t="s"></td><td class="box">${xb.has(x) ? "✓" : xo.has(x) ? '<span class="dmg">✗</span>' : ""}</td><td data-t="n"></td>`;
+        GEAR.fill(tr, { s: x, n: xo.has(x) && !xb.has(x) ? "Not returned yet" : "" });
+        xtb.appendChild(tr);
       });
       return p;
     }));
