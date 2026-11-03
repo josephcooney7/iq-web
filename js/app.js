@@ -32,6 +32,7 @@ window.IQ = (() => {
       <span class="iq-links">
         <a href="/dashboard" ${active === "dashboard" ? 'aria-current="page"' : ""}>Dashboard</a>
         <a href="/setup" data-staff ${active === "setup" ? 'aria-current="page"' : ""}>Setup</a>
+        <a href="/gear" data-staff ${active === "gear" ? 'aria-current="page"' : ""}>Equipment</a>
       </span>
       <button type="button" class="iq-out" hidden>Sign out</button>`;
     document.body.prepend(bar);

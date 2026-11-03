@@ -1,0 +1,54 @@
+/* Equipment sign-out pages: scan page, equipment list, printable sheet. */
+* { box-sizing: border-box; }
+body { font-size: 16px; }
+main { max-width: 640px; margin: 0 auto; padding: 16px 16px 48px; }
+h1 { font-family: var(--f-display); font-size: 32px; margin: 0; letter-spacing: .02em; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin: 0 0 8px; }
+.sub { color: var(--ink-2); margin: 2px 0 0; font-size: 15px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px; }
+.banner { border-radius: 12px; padding: 14px; margin-top: 14px; font-size: 16px; line-height: 1.4; border: 1px solid var(--line); background: var(--panel); }
+.banner b { font-family: var(--f-display); font-size: 24px; display: block; letter-spacing: .02em; }
+.banner.in { border-left: 6px solid var(--good); }
+.banner.out { border-left: 6px solid var(--warn); }
+.banner.dmg { border-left: 6px solid var(--bad); }
+button, .btn { font: inherit; font-weight: 600; border-radius: 10px; padding: 12px 16px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; min-height: 48px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.big { width: 100%; font-size: 19px; min-height: 58px; }
+button:disabled { opacity: .5; cursor: default; }
+label.f { display: grid; gap: 6px; font-size: 14px; color: var(--ink-2); font-weight: 500; margin-top: 12px; }
+input[type=text], textarea, select { font: inherit; font-size: 16px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+textarea { min-height: 70px; resize: vertical; }
+.who { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--ink-2); margin-top: 12px; }
+.who b { color: var(--ink); }
+.items { display: grid; gap: 8px; margin-top: 10px; }
+.item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); }
+.item.off { opacity: .55; }
+.item .top { display: flex; align-items: center; gap: 12px; }
+.item input[type=checkbox] { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+.item .name { flex: 1; font-weight: 600; }
+.item .name small { display: block; font-weight: 400; color: var(--ink-3); font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; flex: none; }
+.seg button { border: 0; border-radius: 0; min-height: 38px; padding: 6px 12px; font-size: 14px; background: transparent; }
+.seg button[aria-pressed="true"].ok { background: var(--good); color: #fff; }
+.seg button[aria-pressed="true"].dmg { background: var(--bad); color: #fff; }
+.dmgbox { display: grid; gap: 8px; margin-top: 10px; }
+.dmgbox[hidden] { display: none; }
+.photo { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); }
+.photo img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+.photo label { font-weight: 600; color: var(--accent); cursor: pointer; }
+.photo input { display: none; }
+.msg { margin-top: 12px; font-size: 15px; }
+.msg:empty { display: none; }
+.msg.bad { color: var(--bad); } .msg.good { color: var(--good); }
+.hist { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
+.hist li { padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-2); line-height: 1.4; }
+.hist li:first-child { border-top: 0; }
+.hist b { color: var(--ink); }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: .04em; vertical-align: 1px; }
+.tag.out { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.tag.back, .tag.in { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.tag.dmg { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+a.link { color: var(--accent); }
+.links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 15px; }
+.thumb { margin-top: 6px; max-width: 220px; border-radius: 8px; display: block; }
+[hidden] { display: none !important; }

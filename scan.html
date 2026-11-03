@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IQ Equipment Scan</title>
+<meta name="description" content="Sign a piece of equipment out or back in by scanning its QR sticker.">
+<meta name="theme-color" content="#0d5f7a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stapleton IQ">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="stylesheet" href="/css/gear.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+</head>
+<body>
+<main>
+  <h1 id="title">Equipment</h1>
+  <p class="sub" id="kind">&nbsp;</p>
+  <div id="banner" class="banner" hidden></div>
+
+  <form id="form" class="panel" hidden novalidate>
+    <h2 id="formTitle">Sign out</h2>
+    <label class="f">Event / location
+      <input type="text" name="event" list="eventList" autocomplete="off" required placeholder="e.g. NBAA Miami Opa-locka">
+      <datalist id="eventList"></datalist>
+    </label>
+    <div class="who"><span id="whoLbl">Taken out by</span><b id="whoName"></b><span>Date</span><b id="when"></b></div>
+    <h2 style="margin-top:16px" id="itemsTitle">Units</h2>
+    <div class="items" id="items"></div>
+    <p class="msg" id="msg" role="status"></p>
+    <button class="primary big" type="submit" id="go" style="margin-top:14px">Sign out</button>
+  </form>
+
+  <div id="done" class="panel" hidden>
+    <h2>Saved</h2>
+    <p id="doneTxt" style="margin:0;font-size:17px;line-height:1.4"></p>
+    <div class="links">
+      <a class="link" id="sheetLink" href="#">Sign-out sheet for this event (print or save as PDF)</a>
+      <a class="link" href="/gear">All equipment</a>
+    </div>
+  </div>
+
+  <div class="panel" id="histPanel" hidden>
+    <h2>History for this unit</h2>
+    <ul class="hist" id="hist"></ul>
+  </div>
+  <p class="msg bad" id="err"></p>
+</main>
+<script src="/js/supabase.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/gear.js"></script>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const bar = IQ.topbar("gear");
+  try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  const code = decodeURIComponent((location.pathname.match(/^\/g\/([^/]+)/) || [])[1] || new URLSearchParams(location.search).get("code") || "");
+  if (!code) { location.replace("/gear"); return; }
+
+  let data;
+  async function load() {
+    try { data = await IQ.rpc("web_gear_item", { p_code: code }); }
+    catch (e) { $("err").textContent = /unknown_item/.test(e.message) ? "This sticker isn't in the system (" + code + "). Ask Joe to add it." : IQ.explain(e); return false; }
+    return true;
+  }
+  if (!(await load())) return;
+  draw();
+
+  function draw() {
+    const it = data.item;
+    document.title = it.kind + " " + it.serial + " · Stapleton IQ";
+    $("title").textContent = it.kind + " " + it.serial;
+    $("kind").textContent = it.label || "Sticker " + it.code;
+    const out = it.state === "out";
+    const b = $("banner"); b.hidden = false;
+    b.className = "banner " + (it.flag_damaged ? "dmg" : out ? "out" : "in");
+    b.innerHTML = out
+      ? `<b>Signed out</b>To <span data-t="ev"></span> by <span data-t="by"></span>, ${GEAR.when(it.at)}.`
+      : `<b>In storage</b>${it.at ? "Returned by <span data-t=by></span>, " + GEAR.when(it.at) + "." : "Not signed out yet."}`;
+    GEAR.fill(b, { ev: it.event_name, by: it.by_name });
+    if (it.flag_damaged) {
+      const p = document.createElement("div"); p.style.marginTop = "6px"; p.style.color = "var(--bad)"; p.style.fontWeight = "600";
+      p.textContent = "Reported damaged" + (it.note ? ": " + it.note : ". See history below.");
+      b.appendChild(p);
+    }
+
+    // The form: sign out if it's in, return if it's out.
+    const action = out ? "back" : "out";
+    const f = $("form"); f.hidden = false;
+    $("formTitle").textContent = out ? "Return" : "Sign out";
+    $("go").textContent = out ? "Return" : "Sign out";
+    $("whoLbl").textContent = out ? "Returned by" : "Taken out by";
+    $("whoName").textContent = data.my_name || "you";
+    $("when").textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    $("itemsTitle").textContent = out ? "Units coming back (tick any others you're returning)" : "Units going out (tick any others you're taking)";
+    f.event.value = out ? (it.event_name || "") : (data.suggested_event || "");
+    $("eventList").replaceChildren(...data.event_names.map((n) => Object.assign(document.createElement("option"), { value: n })));
+
+    // This unit first and ticked, then the rest of the same kind.
+    const others = data.same_kind.map((o) => ({ ...o, usable: (o.state === "out") === out }));
+    // When returning, list units out at the same event first.
+    others.sort((a, c) => (c.usable - a.usable) || ((c.event_name === it.event_name) - (a.event_name === it.event_name)));
+    const rows = [GEAR.row({ ...it, usable: true }, true, false)].concat(others.map((o) =>
+      GEAR.row(o, false, !o.usable, o.usable ? null : (o.state === "out" ? "Already out: " + (o.event_name || "") + ", " + (o.by_name || "") : "Already in storage"))));
+    $("items").replaceChildren(...rows.map((r) => r.el));
+
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const msg = $("msg"); msg.className = "msg"; msg.textContent = "";
+      const ev = f.event.value.trim();
+      if (!ev) { msg.className = "msg bad"; msg.textContent = "Type the event or location first."; f.event.focus(); return; }
+      const picked = rows.filter((r) => r.checked());
+      if (!picked.length) { msg.className = "msg bad"; msg.textContent = "Tick at least one unit."; return; }
+      const missingNote = picked.find((r) => r.value().condition === "damaged" && !r.value().note && !r.value().photo_b64);
+      if (missingNote) { msg.className = "msg bad"; msg.textContent = "Say what's wrong (or add a photo) for each damaged unit."; return; }
+      $("go").disabled = true; $("go").textContent = "Saving…";
+      try {
+        const res = await IQ.rpc("web_gear_move", { p_action: action, p_event_name: ev, p_items: picked.map((r) => r.value()) });
+        const names = picked.map((r) => r.serial).join(", ");
+        const dmg = picked.filter((r) => r.value().condition === "damaged").length;
+        $("doneTxt").textContent = `${picked.length} ${it.kind}${picked.length > 1 ? "s" : ""} (${names}) ${action === "out" ? "signed out to" : "returned from"} ${ev} by ${res.by_name}.` +
+          (dmg ? ` ${dmg} marked damaged.` : "");
+        $("sheetLink").href = "/gear-sheet?event=" + encodeURIComponent(ev);
+        $("done").hidden = false; f.hidden = true;
+        await load(); drawBannerAndHistoryOnly();
+      } catch (err) {
+        msg.className = "msg bad"; msg.textContent = IQ.explain(err);
+      } finally { $("go").disabled = false; $("go").textContent = out ? "Return" : "Sign out"; }
+    };
+    history();
+  }
+
+  function drawBannerAndHistoryOnly() {
+    const it = data.item, out = it.state === "out", b = $("banner");
+    b.className = "banner " + (it.flag_damaged ? "dmg" : out ? "out" : "in");
+    b.innerHTML = out ? `<b>Signed out</b>To <span data-t="ev"></span> by <span data-t="by"></span>, ${GEAR.when(it.at)}.`
+                      : `<b>In storage</b>Returned by <span data-t="by"></span>, ${GEAR.when(it.at)}.`;
+    GEAR.fill(b, { ev: it.event_name, by: it.by_name });
+    history();
+  }
+
+  function history() {
+    $("histPanel").hidden = false;
+    GEAR.history($("hist"), data.history, false);
+  }
+})();
+</script>
+</body>
+</html>
