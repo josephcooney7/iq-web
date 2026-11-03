@@ -29,6 +29,9 @@
       <input type="text" name="event" list="eventList" autocomplete="off" required placeholder="e.g. NBAA Miami Opa-locka">
       <datalist id="eventList"></datalist>
     </label>
+    <label class="f" id="nameBox" hidden>Your full name (asked once, then it's signed for you every time)
+      <input type="text" name="fullname" autocomplete="name" maxlength="80" placeholder="e.g. Joe Cooney">
+    </label>
     <div class="who"><span id="whoLbl">Taken out by</span><b id="whoName"></b><span>Date</span><b id="when"></b></div>
     <h2 style="margin-top:16px" id="itemsTitle">Units</h2>
     <div class="items" id="items"></div>
@@ -95,7 +98,9 @@
     $("formTitle").textContent = out ? "Return" : "Sign out";
     $("go").textContent = out ? "Return" : "Sign out";
     $("whoLbl").textContent = out ? "Returned by" : "Taken out by";
-    $("whoName").textContent = data.my_name || "you";
+    $("whoName").textContent = data.needs_name ? "(your name)" : (data.my_name || "you");
+    $("nameBox").hidden = !data.needs_name;
+    f.fullname.oninput = () => { $("whoName").textContent = f.fullname.value.trim() || "(your name)"; };
     $("when").textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
     $("itemsTitle").textContent = out ? "Units coming back (tick any others you're returning)" : "Units going out (tick any others you're taking)";
     f.event.value = out ? (it.event_name || "") : (data.suggested_event || "");
@@ -118,8 +123,11 @@
       if (!picked.length) { msg.className = "msg bad"; msg.textContent = "Tick at least one unit."; return; }
       const missingNote = picked.find((r) => r.value().condition === "damaged" && !r.value().note && !r.value().photo_b64);
       if (missingNote) { msg.className = "msg bad"; msg.textContent = "Say what's wrong (or add a photo) for each damaged unit."; return; }
+      const fullname = data.needs_name ? f.fullname.value.trim() : "";
+      if (data.needs_name && fullname.length < 2) { msg.className = "msg bad"; msg.textContent = "Type your full name first. You only do this once."; f.fullname.focus(); return; }
       $("go").disabled = true; $("go").textContent = "Saving…";
       try {
+        if (fullname) { await IQ.rpc("web_set_my_name", { p_name: fullname }); data.needs_name = false; $("nameBox").hidden = true; }
         const res = await IQ.rpc("web_gear_move", { p_action: action, p_event_name: ev, p_items: picked.map((r) => r.value()) });
         const names = picked.map((r) => r.serial).join(", ");
         const dmg = picked.filter((r) => r.value().condition === "damaged").length;

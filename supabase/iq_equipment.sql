@@ -72,10 +72,21 @@ revoke all on function public.gear_status_json(public.equipment) from public, an
 -- Who is signed in, for "Taken out by" / "Returned by".
 create or replace function public.gear_my_name()
 returns text language sql stable security definer set search_path = public as $$
-  select coalesce(nullif(trim(p.full_name), ''), split_part(u.email, '@', 1))
+  select coalesce(nullif(trim(p.full_name), ''), nullif(trim(u.raw_user_meta_data->>'full_name'), ''), split_part(u.email, '@', 1))
   from auth.users u left join profiles p on p.user_id = u.id where u.id = auth.uid();
 $$;
 revoke all on function public.gear_my_name() from public, anon, authenticated;
+
+-- Save the signed-in person's own name (asked once, the first time they scan).
+create or replace function public.web_set_my_name(p_name text)
+returns text language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not coalesce(is_staff(), false) then raise exception 'not_allowed' using errcode = '42501'; end if;
+  p_name := regexp_replace(trim(coalesce(p_name, '')), '\s+', ' ', 'g');
+  if char_length(p_name) < 2 or char_length(p_name) > 80 then raise exception 'bad_name'; end if;
+  update profiles set full_name = p_name where user_id = auth.uid();
+  return p_name;
+end $$;
 
 -- Everything the scan page needs for one sticker: the item, the rest of its kind, history,
 -- and a suggested event (the last one this person used today, else a live IQ event).
@@ -94,6 +105,8 @@ begin
   return jsonb_build_object(
     'item', gear_status_json(v),
     'my_name', gear_my_name(),
+    'needs_name', not exists (select 1 from auth.users u left join profiles p on p.user_id = u.id where u.id = auth.uid()
+                    and coalesce(nullif(trim(p.full_name), ''), nullif(trim(u.raw_user_meta_data->>'full_name'), '')) is not null),
     'suggested_event', v_event,
     'same_kind', (select coalesce(jsonb_agg(gear_status_json(e) order by e.serial), '[]') from equipment e
                    where e.kind = v.kind and e.active and e.id <> v.id),
@@ -165,6 +178,6 @@ begin
 end $$;
 
 revoke all on function public.web_gear_item(text), public.web_gear_move(text, text, jsonb), public.web_gear_list(),
-  public.web_gear_history(text, text), public.web_gear_photo(uuid) from public, anon;
+  public.web_gear_history(text, text), public.web_gear_photo(uuid), public.web_set_my_name(text) from public, anon;
 grant execute on function public.web_gear_item(text), public.web_gear_move(text, text, jsonb), public.web_gear_list(),
-  public.web_gear_history(text, text), public.web_gear_photo(uuid) to authenticated;
+  public.web_gear_history(text, text), public.web_gear_photo(uuid), public.web_set_my_name(text) to authenticated;
