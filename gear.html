@@ -108,10 +108,11 @@
       ? `Batteries: ${bOut} went out, ${bBack} back` + (bOut > bBack ? `, ${bOut - bBack} still missing.` : ".") : "";
     $("bat").style.color = bOut > bBack ? "var(--bad)" : "";
     // Other gear (table, wand, baskets): went out on any sheet, came back on any return sheet.
-    const xo = new Set(), xb = new Set();
-    sheets.forEach((b) => (b.extras || []).forEach((x) => (b.action === "out" ? xo : xb).add(x)));
-    const xMiss = [...xo].filter((x) => !xb.has(x));
-    $("ext").textContent = xo.size ? [...xo].map((x) => x + (xb.has(x) ? ": back" : ": still out")).join(" · ") : "";
+    const xo = {}, xb = {};
+    sheets.forEach((b) => Object.entries(GEAR.xmap(b.extras)).forEach(([n, q]) => { const t = b.action === "out" ? xo : xb; t[n] = (t[n] || 0) + q; }));
+    const xMiss = Object.keys(xo).filter((n) => (xb[n] || 0) < xo[n]);
+    $("ext").textContent = Object.keys(xo).length ? Object.keys(xo).map((n) =>
+      `${n}: ${xo[n]} out, ${xb[n] || 0} back` + ((xb[n] || 0) < xo[n] ? ` (${xo[n] - (xb[n] || 0)} missing)` : "")).join(" · ") : "";
     $("ext").style.color = xMiss.length ? "var(--bad)" : "";
     $("nOut").textContent = rows.length; $("nBack").textContent = back.length; $("nMiss").textContent = miss.length;
     $("checkList").replaceChildren(

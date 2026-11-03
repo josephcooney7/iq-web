@@ -2,6 +2,14 @@
 window.GEAR = (() => {
   // Other gear that goes out with the gates, ticked on each sign-out / return.
   const EXTRAS = ["Table", "Handheld wand", "Baskets"];
+  // Saved extras are [{name, qty}] (older sheets: ["Table"] = 1 each). Returns {name: qty}.
+  function xmap(list) {
+    const m = {};
+    (list || []).forEach((x) => { const n = typeof x === "string" ? x : x && x.name; if (n) m[n] = (m[n] || 0) + (typeof x === "string" ? 1 : Number(x.qty) || 0); });
+    return m;
+  }
+  // "Table ×2, Handheld wand"
+  function xtext(list) { return Object.entries(xmap(list)).map(([n, q]) => n + (q > 1 ? " ×" + q : "")).join(", "); }
   function when(t) {
     if (!t) return "";
     const d = new Date(t), now = new Date();
@@ -83,7 +91,7 @@ window.GEAR = (() => {
   function batchText(b) {
     if (!b) return "";
     return [b.location, b.batteries != null ? b.batteries + " batter" + (b.batteries === 1 ? "y" : "ies") : "",
-      (b.extras && b.extras.length) ? b.extras.join(", ") : "",
+      xtext(b.extras),
       b.date_out ? "out " + day(b.date_out) : "", b.date_back ? "back " + day(b.date_back) : ""].filter(Boolean).join(" · ");
   }
 
@@ -110,5 +118,5 @@ window.GEAR = (() => {
     }));
   }
 
-  return { EXTRAS, when, fill, row, history, shrink, day, batchText };
+  return { EXTRAS, xmap, xtext, when, fill, row, history, shrink, day, batchText };
 })();

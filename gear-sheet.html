@@ -104,7 +104,7 @@ td.ser { font-weight: 600; width: 110px; }
           <div class="fld"><small>Batteries back</small><div data-t="bback"></div></div>
         </div>
         <table><thead><tr><th>Out</th><th>Serial #</th><th>Back</th><th>Condition / notes</th></tr></thead><tbody></tbody></table>
-        <table style="margin-top:14px"><thead><tr><th>Out</th><th>Other gear</th><th>Back</th><th>Notes</th></tr></thead><tbody class="xrows"></tbody></table>
+        <table style="margin-top:14px"><thead><tr><th>Qty out</th><th>Other gear</th><th>Qty back</th><th>Notes</th></tr></thead><tbody class="xrows"></tbody></table>
         <div class="damage"><small>Damage or issues to report</small><div data-t="dmg"></div></div>
         <p class="foot">Made by Stapleton IQ from QR scans · printed <span data-t="now"></span></p>`;
       // Each sign-out / return sheet counted once for batteries.
@@ -138,13 +138,14 @@ td.ser { font-weight: 600; width: 110px; }
         tb.appendChild(tr);
       });
       // Other gear on this event's sheets: Table, Handheld wand, Baskets.
-      const xo = new Set(), xb = new Set();
-      sh.forEach((b) => (b.extras || []).forEach((x) => (b.action === "out" ? xo : xb).add(x)));
+      const xo = {}, xb = {};
+      sh.forEach((b) => Object.entries(GEAR.xmap(b.extras)).forEach(([n, q]) => { const t = b.action === "out" ? xo : xb; t[n] = (t[n] || 0) + q; }));
       const xtb = p.querySelector("tbody.xrows");
-      [...new Set([...GEAR.EXTRAS, ...xo])].forEach((x) => {
+      [...new Set([...GEAR.EXTRAS, ...Object.keys(xo)])].forEach((x) => {
+        const o = xo[x] || 0, k = xb[x] || 0;
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td class="box">${xo.has(x) ? "✓" : ""}</td><td class="ser" data-t="s"></td><td class="box">${xb.has(x) ? "✓" : xo.has(x) ? '<span class="dmg">✗</span>' : ""}</td><td data-t="n"></td>`;
-        GEAR.fill(tr, { s: x, n: xo.has(x) && !xb.has(x) ? "Not returned yet" : "" });
+        tr.innerHTML = `<td class="box">${o || ""}</td><td class="ser" data-t="s"></td><td class="box">${o ? (k >= o ? k : '<span class="dmg">' + k + '</span>') : ""}</td><td data-t="n"></td>`;
+        GEAR.fill(tr, { s: x, n: o && k < o ? (o - k) + " not returned yet" : "" });
         xtb.appendChild(tr);
       });
       return p;

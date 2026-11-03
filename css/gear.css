@@ -74,3 +74,10 @@ input:disabled { opacity: .7; }
 .chip input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
 .chip input[type=checkbox]:checked::after { content: ""; width: 6px; height: 11px; border: solid var(--accent-ink); border-width: 0 3px 3px 0; transform: translateY(-1px) rotate(45deg); }
 .chip:has(input:checked) { border-color: var(--accent); }
+.xrow { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); width: 100%; }
+.xrow.on { border-color: var(--accent); }
+.xname { flex: 1; font-weight: 600; }
+.qty { display: inline-flex; align-items: center; gap: 6px; }
+.qty button { min-width: 44px; min-height: 40px; padding: 0; font-size: 20px; }
+.qty b { min-width: 26px; text-align: center; font-size: 18px; }
+.extras:has(.xrow) { flex-direction: column; }
