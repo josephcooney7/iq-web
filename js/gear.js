@@ -91,7 +91,7 @@ window.GEAR = (() => {
   function batchText(b) {
     if (!b) return "";
     return [b.location, b.batteries != null ? b.batteries + " batter" + (b.batteries === 1 ? "y" : "ies") : "",
-      xtext(b.extras),
+      xtext(b.extras), b.sop_read ? "read the SOP" : "",
       b.date_out ? "out " + day(b.date_out) : "", b.date_back ? "back " + day(b.date_back) : ""].filter(Boolean).join(" · ");
   }
 
