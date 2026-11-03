@@ -52,8 +52,11 @@ a.link { color: var(--accent); }
 .links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 15px; }
 .thumb { margin-top: 6px; max-width: 220px; border-radius: 8px; display: block; }
 [hidden] { display: none !important; }
-.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
+/* Date boxes: one per row so phones (iPhone date boxes are wide) never overlap */
+.two { display: grid; grid-template-columns: 1fr; gap: 0; }
 .two label, .two input { min-width: 0; }
+input[type=date] { -webkit-appearance: none; appearance: none; display: block; box-sizing: border-box; max-width: 100%; text-align: left; }
+input[type=date]::-webkit-date-and-time-value { text-align: left; }
 input[type=date], input[type=number] { font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; min-height: 46px; }
 input:disabled { opacity: .7; }
 .stepper { display: flex; gap: 8px; align-items: stretch; max-width: 220px; }
