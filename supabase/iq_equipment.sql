@@ -37,8 +37,6 @@ create index if not exists equipment_moves_batch on public.equipment_moves (batc
 
 alter table public.equipment       enable row level security;
 alter table public.equipment_moves enable row level security;
-drop policy if exists staff_all on public.equipment;
-drop policy if exists staff_read on public.equipment_moves;
 create policy staff_all on public.equipment       for all to authenticated using (is_staff()) with check (is_staff());
 create policy staff_read on public.equipment_moves for select to authenticated using (is_staff());
 -- No insert/update/delete policy on moves: the website writes them only through web_gear_move,
