@@ -147,15 +147,18 @@
     $("backLbl").textContent = out ? "Date back" : "Date back (expected, if you know it)";
     $("batLbl").textContent = out ? "Batteries returned" + (lo.batteries != null ? " (" + lo.batteries + " went out)" : "") : "Batteries taken";
     f.batteries.value = out ? (lo.batteries != null ? lo.batteries : 0) : 0;
-    // Other gear on this sheet: tick boxes. On return, the ones that went out start ticked.
-    const wentOut = (lo.extras || []);
-    $("extLbl").textContent = out ? "Also coming back" + (wentOut.length ? " (went out: " + wentOut.join(", ") + ")" : "") : "Also taking";
+    // Other gear on this sheet: a 0-10 counter for each. On return, it starts at what went out.
+    const wentOut = GEAR.xmap(lo.extras);
+    const wentTxt = GEAR.xtext(lo.extras);
+    $("extLbl").textContent = out ? "Also coming back" + (wentTxt ? " (went out: " + wentTxt + ")" : "") : "Also taking";
     $("extras").replaceChildren(...GEAR.EXTRAS.map((name) => {
-      const l = document.createElement("label"); l.className = "chip";
-      l.innerHTML = '<input type="checkbox"><span></span>';
-      l.querySelector("span").textContent = name; l.querySelector("input").value = name;
-      l.querySelector("input").checked = out && wentOut.includes(name);
-      return l;
+      const r = document.createElement("div"); r.className = "xrow";
+      r.innerHTML = '<span class="xname"></span><span class="qty"><button type="button" data-d="-1" aria-label="One less">−</button><b>0</b><button type="button" data-d="1" aria-label="One more">+</button></span>';
+      r.querySelector(".xname").textContent = name; r.dataset.name = name;
+      const v = r.querySelector("b"), set = (n) => { n = Math.max(0, Math.min(10, n)); v.textContent = n; r.dataset.qty = n; r.classList.toggle("on", n > 0); };
+      set(out ? (wentOut[name] || 0) : 0);
+      r.querySelectorAll("button").forEach((bt) => (bt.onclick = () => set(Number(r.dataset.qty) + Number(bt.dataset.d))));
+      return r;
     }));
     f.querySelectorAll(".stepper button").forEach((b) => (b.onclick = () => {
       f.batteries.value = Math.max(0, Math.min(500, (parseInt(f.batteries.value, 10) || 0) + Number(b.dataset.d)));
@@ -184,13 +187,13 @@
       $("go").disabled = true; $("go").textContent = "Saving…";
       try {
         if (fullname) { await IQ.rpc("web_set_my_name", { p_name: fullname }); data.needs_name = false; $("nameBox").hidden = true; }
-        const extras = [...$("extras").querySelectorAll("input:checked")].map((c) => c.value);
+        const extras = [...$("extras").querySelectorAll(".xrow")].map((r) => ({ name: r.dataset.name, qty: Number(r.dataset.qty) })).filter((x) => x.qty > 0);
         const res = await IQ.rpc("web_gear_save", { p: {
           action, event_name: ev, location: f.location.value.trim(), batteries: isNaN(batteries) ? null : batteries, extras,
           date_out: f.dateout.value || null, date_back: f.dateback.value || null, items: picked.map((r) => r.value()) } });
         const dmg = picked.filter((r) => r.value().condition === "damaged").length;
         $("doneTxt").textContent = `${picked.length} ${it.kind}${picked.length > 1 ? "s" : ""} (${picked.map((r) => r.serial).join(", ")}) ` +
-          `${action === "out" ? "signed out to" : "returned from"} ${ev}` + (isNaN(batteries) || !batteries ? "" : `, ${batteries} batter${batteries === 1 ? "y" : "ies"}`) + (extras.length ? ", plus " + extras.join(", ").toLowerCase() : "") +
+          `${action === "out" ? "signed out to" : "returned from"} ${ev}` + (isNaN(batteries) || !batteries ? "" : `, ${batteries} batter${batteries === 1 ? "y" : "ies"}`) + (extras.length ? ", plus " + GEAR.xtext(extras).toLowerCase() : "") +
           `, by ${res.by_name}.` + (dmg ? ` ${dmg} marked damaged.` : "");
         $("sheetLink").href = "/gear-sheet?event=" + encodeURIComponent(ev);
         $("done").hidden = false; f.hidden = true;
