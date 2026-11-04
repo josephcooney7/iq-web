@@ -39,6 +39,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   <p class="sub" id="who">&nbsp;</p>
 
   <a class="tile" href="/gear" id="fieldTile" hidden><b>Equipment</b><span>Sign OpenGates out and back in, and see what's still out. You can also just scan a gate's QR sticker.</span></a>
+  <a class="tile" href="/client" id="clientTile" hidden><b>Your event</b><span>Live counts, security wait times, the next-morning report and updates from your Stapleton team.</span></a>
   <a class="tile" href="/dashboard" id="dashTile" hidden><b>Live dashboard</b><span>People through each checkpoint, updated every 20 seconds.</span></a>
 
   <div id="staff" hidden>
@@ -77,6 +78,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   try { me = await IQ.requireLogin({ bar }); } catch { return; }
   $("who").textContent = "Signed in as " + (me.email || "") + (me.role ? " · " + IQ.roleName(me.role) : "");
   $("dashTile").hidden = !me.dash;
+  $("clientTile").hidden = !me.client;
   $("fieldTile").hidden = !me.field || me.staff;
   if (me.staff) {
     $("staff").hidden = false;

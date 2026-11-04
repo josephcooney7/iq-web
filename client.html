@@ -281,14 +281,20 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   const $ = (id) => document.getElementById(id);
   const bar = IQ.topbar("client");
   let me;
-  try { me = await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  try { me = await IQ.requireLogin({ cv: true, bar }); } catch { return; }
+  // A client login always sees the client's version: no View-as-client switch, no Incidents tab.
+  const isClient = !!me.client;
+  if (isClient) {
+    document.querySelector(".asclient").hidden = true;
+    document.querySelectorAll("[data-staffonly]").forEach((x) => (x.hidden = true));
+  }
 
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
   const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-  let data = null, eventId = new URLSearchParams(location.search).get("event") || null, tab = "Live", asClient = false, timer = null;
+  let data = null, eventId = new URLSearchParams(location.search).get("event") || null, tab = "Live", asClient = isClient, timer = null;
 
   /* ---------- tabs and view-as-client ---------- */
   const tabs = [...document.querySelectorAll(".tabs button")];
@@ -336,9 +342,9 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     renderApprovals();
     if (!data.event) {
       $("evName").textContent = "No approved events yet";
-      $("evSub").textContent = data.can_approve ? "Approve an event under All events to show it here." : "Ask Joe to approve an event for Client view.";
+      $("evSub").textContent = data.can_approve ? "Approve an event under All events to show it here." : isClient ? "Your event will show here once your Stapleton team turns it on." : "Ask Joe to approve an event for Client view.";
       $("evSel").replaceChildren();
-      $("evList").replaceChildren(el("div", "empty", "No events are approved for Client view yet."));
+      $("evList").replaceChildren(el("div", "empty", isClient ? "No events to show yet." : "No events are approved for Client view yet."));
       return;
     }
     const ev = data.event || {}, cps = data.checkpoints || [], buckets = data.buckets || [], waits = data.wait_buckets || [];
