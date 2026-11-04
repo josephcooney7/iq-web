@@ -1,7 +1,7 @@
 /* Makes the site installable and lets the pages open with a weak signal.
    Always tries the network first so changes show up straight away. Data calls to Supabase are never cached. */
-const CACHE = "iq-shell-v5";
-const SHELL = ["/", "/dashboard", "/setup", "/css/common.css", "/js/app.js", "/client", "/gear", "/scan", "/css/gear.css", "/js/gear.js", "/js/sop.js", "/js/supabase.js", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/stapleton-logo.jpg"];
+const CACHE = "iq-shell-v6";
+const SHELL = ["/", "/dashboard", "/setup", "/css/common.css", "/js/app.js", "/client", "/gear", "/scan", "/css/gear.css", "/js/gear.js", "/js/sop.js", "/js/supabase.js", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/stapleton-logo.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
