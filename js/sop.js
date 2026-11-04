@@ -2,29 +2,44 @@
    To change the wording, edit the steps below and bump "version" so the sheet shows which one was read. */
 window.GEAR_SOP = {
   OpenGate: {
-    version: "draft-2026-11-03",
+    version: "2026-11-04",
     title: "OpenGate SOP",
-    draft: true,
+    draft: false,
     sections: [
       { h: "Before you leave", steps: [
-        "Check each gate for cracks, loose panels or damaged cables. If anything is wrong, mark that gate Damaged and add a photo.",
-        "Make sure the batteries are charged, and count them.",
-        "Pack the gates in their cases. Lift with two people."
+        "Check each gate for cracks, loose panels and damaged cables. If anything is wrong, mark that gate Damaged and add a photo.",
+        "Make sure every battery is fully charged, and count them.",
+        "Put every gate in its protective sleeve for transport, every time. Lift with two people.",
+        "Load at least 1 table, 1 handheld wand and 3 baskets with the gates."
       ] },
-      { h: "Setting up", steps: [
+      { h: "Setting up on site", steps: [
         "Set the gates on flat, level ground.",
         "Keep them away from large metal objects, doors, and power cables. These can cause false alarms.",
-        "Turn the gates on and wait for the start-up check to finish before you screen anyone.",
-        "Walk a test item through to make sure the gate alarms before the doors open."
+        "Leave enough space between gates and lanes so guests line up in single file.",
+        "The Stapleton branded socks stay on every gate.",
+        "Turn the gates on and wait for the start-up check to finish.",
+        "Set each gate to the standard 2B setting with sensitivity 0, unless otherwise authorized.",
+        "Walk a test item through each gate and confirm it alarms before the doors open.",
+        "Tell your supervisor the gates are ready."
       ] },
       { h: "During the event", steps: [
-        "Never leave the gates unattended.",
+        "Never leave a gate unattended while it's set up.",
+        "Keep drinks and liquids away from the gates.",
+        "Swap batteries before they run flat, and keep spares charged.",
         "Report any problem to your supervisor right away."
       ] },
-      { h: "Packing up", steps: [
-        "Turn the gates off, wipe them down, and check again for damage.",
-        "Count the batteries and put them on charge when you're back.",
-        "Return the gates in this app so we know they're back."
+      { h: "Packing up and returning", steps: [
+        "Turn the gates off and wipe them down.",
+        "Check each gate again for damage.",
+        "Put every gate back in its protective sleeve for transport. Lift with two people.",
+        "Count the batteries, tables, wands and baskets.",
+        "Back at the warehouse, put the batteries on charge.",
+        "Return the gates in this app: scan a sticker, tick every gate coming back, and enter what came back."
+      ] },
+      { h: "If a gate is damaged or not working", steps: [
+        "Stop using that gate and tell your supervisor.",
+        "In this app, mark it Damaged. Say what's wrong and add a photo.",
+        "Don't sign a damaged gate out again until it's fixed and returned as OK."
       ] }
     ]
   }
