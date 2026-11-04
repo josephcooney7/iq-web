@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stapleton IQ Client View</title>
+<meta name="description" content="What a client sees for their event: live counts, security wait times, the next-morning report and incident reports.">
+<meta name="theme-color" content="#0d5f7a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stapleton IQ">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Client view: the page a client sees for their event. Office staff (admin/manager) also get
+   the incident form and a "View as client" switch that hides everything the client wouldn't see. */
+:root { --w1: #9cc7dc; --w2: #2a78b5; --w3: #123f5c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --w1: #2c5a72; --w2: #4d9bd0; --w3: #a9d7f0; } }
+:root[data-theme="dark"] { --w1: #2c5a72; --w2: #4d9bd0; --w3: #a9d7f0; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px;
+  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.05; }
+h2 { font-size: 22px; }
+.mark { font-family: var(--f-display); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--accent); }
+.sub { color: var(--ink-2); font-size: 14px; margin: 4px 0 0; }
+.num { font-family: var(--f-display); font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1; }
+.label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+button, select, input, textarea { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.stack { display: grid; gap: 20px; min-width: 0; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, .btn { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; font-size: 14px; cursor: pointer; min-height: 44px; }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.asclient { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; min-height: 44px; cursor: pointer; }
+.asclient input { width: 18px; height: 18px; accent-color: var(--accent); }
+.banner { background: var(--panel); border: 1px dashed var(--accent); color: var(--ink-2); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tabs button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0 16px; min-height: 44px; font-weight: 600; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); }
+.status.live .dot { background: var(--good); }
+.status.live b { color: var(--good); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+.tile .num { font-size: 40px; }
+.tile .note { font-size: 13px; color: var(--ink-2); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+.panel-head span { font-size: 13px; color: var(--ink-2); }
+.row2 { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.row2 > .wide { flex: 999 1 540px; }
+.row2 > .narrow { flex: 1 1 300px; }
+
+.chart { overflow-x: auto; }
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 190px; border-bottom: 1px solid var(--line); padding-top: 20px; }
+.bar { flex: 1 0 22px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; height: 100%; }
+.bar i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--accent); min-height: 2px; }
+.bar i.peak { background: var(--ink); }
+.bar small { font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticks { display: flex; gap: 4px; padding-top: 4px; }
+.ticks span { flex: 1 0 22px; text-align: center; font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.empty { color: var(--ink-2); font-size: 14px; background: var(--bg); border-radius: 8px; padding: 14px; }
+
+.tablebox { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 460px; }
+th, td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+th { font-size: 12px; color: var(--ink-3); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+.share { display: flex; align-items: center; gap: 8px; }
+.share .track { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.share .track i { display: block; height: 100%; background: var(--accent); }
+.share small { width: 36px; text-align: right; color: var(--ink-2); }
+
+.upd { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.upd:last-child { border-bottom: 0; }
+.upd .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.chip { border-radius: 99px; padding: 2px 10px; font-size: 12px; font-weight: 600; background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+.chip.high { color: var(--bad); border-color: currentColor; }
+.chip.medium { color: var(--warn); border-color: currentColor; }
+.chip.shared { color: var(--good); border-color: currentColor; }
+.upd .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.upd .acts button { font-size: 13px; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
+.upd img { max-width: 240px; border-radius: 8px; border: 1px solid var(--line); }
+
+.report { max-width: 860px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
+.facts div { display: grid; gap: 4px; }
+.facts .num { font-size: 30px; }
+.facts small { color: var(--ink-2); font-size: 13px; }
+
+.evlist a { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.evlist a:last-child { border-bottom: 0; }
+.evlist small { color: var(--ink-2); display: block; }
+
+form.inc { display: grid; gap: 16px; max-width: 760px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.f { display: grid; gap: 6px; font-size: 14px; font-weight: 500; }
+.f input, .f select, .f textarea { font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); min-height: 44px; font-weight: 400; }
+.f textarea { resize: vertical; min-height: 110px; }
+fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
+.sev { display: flex; gap: 10px; flex-wrap: wrap; }
+.sev label { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; min-height: 44px; cursor: pointer; background: var(--panel); font-weight: 600; }
+.sev input { accent-color: var(--accent); width: 18px; height: 18px; }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.msg { font-size: 14px; margin: 0; }
+.msg:empty { display: none; }
+.msg.bad { color: var(--bad); } .msg.good { color: var(--good); }
+.foot { font-size: 13px; color: var(--ink-3); margin: 0; }
+
+@media print {
+  .iq-bar, .top .controls, .tabs, .noprint, #tabLive, #tabEvents, #tabIncidents { display: none !important; }
+  body { background: #fff; }
+  .panel { border: 0; padding: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="mark">Stapleton IQ · Client view</div>
+      <h1 id="evName">Loading…</h1>
+      <p class="sub" id="evSub">&nbsp;</p>
+    </div>
+    <div class="controls">
+      <label class="label" for="evSel">Event</label>
+      <select id="evSel" aria-label="Event"></select>
+      <label class="asclient"><input type="checkbox" id="asClient"> View as client</label>
+    </div>
+  </div>
+
+  <div class="banner" id="clientBanner" hidden>You're seeing exactly what the client sees. Incident reports only show here if they were shared with the client.</div>
+
+  <div class="tabs" role="tablist" aria-label="Page view">
+    <button role="tab" data-tab="Live" aria-selected="true">Live now</button>
+    <button role="tab" data-tab="Report" aria-selected="false">Next-morning report</button>
+    <button role="tab" data-tab="Events" aria-selected="false">All events</button>
+    <button role="tab" data-tab="Incidents" aria-selected="false" data-staffonly>Incidents</button>
+  </div>
+  <p class="msg bad" id="err"></p>
+
+  <!-- LIVE -->
+  <section id="tabLive" class="stack">
+    <div class="status" id="status"><span class="dot" aria-hidden="true"></span><span id="statusTxt">&nbsp;</span></div>
+    <div class="tiles">
+      <div class="tile"><span class="label">People through screening</span><span class="num" id="tTotal">–</span><span class="note" id="tTotalNote">&nbsp;</span></div>
+      <div class="tile"><span class="label">Last 15 minutes</span><span class="num" id="tLast">–</span><span class="note" id="tLastNote">&nbsp;</span></div>
+      <div class="tile"><span class="label">Busiest 15 minutes</span><span class="num" id="tPeak">–</span><span class="note" id="tPeakNote">&nbsp;</span></div>
+      <div class="tile"><span class="label">Security wait right now</span><span class="num" id="tWait">–</span><span class="note" id="tWaitNote">&nbsp;</span></div>
+      <div class="tile"><span class="label">Checkpoints reporting</span><span class="num" id="tCps">–</span><span class="note" id="tCpsNote">&nbsp;</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Arrivals every 15 minutes</h2><span>Darkest bar = busiest period</span></div>
+      <div id="arrChart"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Security wait time</h2><span>Estimated from people in line and how fast the lanes are moving</span></div>
+      <div class="legend" id="waitLegend">
+        <span><b style="background:var(--w1)"></b>Under 10 min</span>
+        <span><b style="background:var(--w2)"></b>10 to 15 min</span>
+        <span><b style="background:var(--w3)"></b>Over 15 min</span>
+      </div>
+      <div id="waitChart"></div>
+    </div>
+
+    <div class="row2">
+      <div class="panel wide">
+        <h2>By checkpoint</h2>
+        <div class="tablebox"><table>
+          <thead><tr><th>Checkpoint</th><th class="r">Total</th><th class="r">Last 15 min</th><th class="r">Wait now</th><th>Share of total</th></tr></thead>
+          <tbody id="cpRows"></tbody>
+        </table></div>
+      </div>
+      <div class="panel narrow">
+        <h2>Updates from your Stapleton team</h2>
+        <div id="updList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT -->
+  <section id="tabReport" hidden>
+    <div class="panel report">
+      <div class="panel-head"><span class="label">Event summary</span><button type="button" class="btn noprint" id="printBtn">Print or save as PDF</button></div>
+      <h2 id="rTitle">&nbsp;</h2>
+      <div class="facts" id="rFacts"></div>
+      <div>
+        <h3 style="font-size:18px;margin-bottom:6px">Arrivals through the event</h3>
+        <div id="rChart"></div>
+      </div>
+      <div id="rIncWrap">
+        <h3 style="font-size:18px;margin-bottom:6px">Incidents</h3>
+        <div id="rInc"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ALL EVENTS -->
+  <section id="tabEvents" hidden>
+    <div class="panel">
+      <h2>All events</h2>
+      <div class="evlist" id="evList"></div>
+    </div>
+  </section>
+
+  <!-- INCIDENTS (office staff only) -->
+  <section id="tabIncidents" hidden>
+    <div class="row2">
+      <div class="panel wide">
+        <h2>Log an incident</h2>
+        <form class="inc" id="incForm" novalidate>
+          <div class="grid2">
+            <label class="f">When did it happen?<input type="datetime-local" name="when" required></label>
+            <label class="f">Where?<select name="where"></select></label>
+            <label class="f">What type of incident?<select name="category" required></select></label>
+            <label class="f">What was done?<select name="action">
+              <option>Item taken / checked</option><option>Guest returned item to car</option><option>Entry refused</option>
+              <option>Guest removed</option><option>Medical called</option><option>Police called</option><option>No action needed</option><option>Other</option>
+            </select></label>
+          </div>
+          <fieldset>
+            <legend>How serious?</legend>
+            <div class="sev">
+              <label><input type="radio" name="severity" value="low" checked> Low</label>
+              <label><input type="radio" name="severity" value="medium"> Medium</label>
+              <label><input type="radio" name="severity" value="high"> High</label>
+            </div>
+          </fieldset>
+          <label class="f">What happened?<textarea name="note" maxlength="2000" placeholder="Describe what happened, in your own words"></textarea></label>
+          <label class="f">Photo (optional)<input type="file" name="photo" accept="image/*"></label>
+          <img id="incPreview" alt="Photo preview" hidden style="max-width:240px;border-radius:8px;border:1px solid var(--line)">
+          <label class="check"><input type="checkbox" name="police"> Police or EMS were notified</label>
+          <label class="check"><input type="checkbox" name="share"> Show this report to the client</label>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <button type="submit" class="btn primary">Save report</button>
+            <span class="foot">Your name and the time you saved it are added automatically.</span>
+          </div>
+          <p class="msg" id="incMsg" role="status"></p>
+        </form>
+      </div>
+      <div class="panel narrow">
+        <h2>Reports for this event</h2>
+        <div id="incList"></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">Counts only. No video or images of guests are recorded by the counters.</p>
+</div>
+
+<script src="/js/supabase.js"></script>
+<script src="/js/app.js"></script>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const bar = IQ.topbar("client");
+  let me;
+  try { me = await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+
+  const fmt = (n) => Number(n || 0).toLocaleString("en-US");
+  const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  let data = null, eventId = new URLSearchParams(location.search).get("event") || null, tab = "Live", asClient = false, timer = null;
+
+  /* ---------- tabs and view-as-client ---------- */
+  const tabs = [...document.querySelectorAll(".tabs button")];
+  const showTab = (t) => {
+    tab = t;
+    tabs.forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    ["Live", "Report", "Events", "Incidents"].forEach((n) => ($("tab" + n).hidden = n !== t));
+  };
+  tabs.forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  $("asClient").addEventListener("change", (e) => {
+    asClient = e.target.checked;
+    $("clientBanner").hidden = !asClient;
+    document.querySelectorAll("[data-staffonly]").forEach((x) => (x.hidden = asClient));
+    if (asClient && tab === "Incidents") showTab("Live");
+    render();
+  });
+  $("evSel").addEventListener("change", (e) => { eventId = e.target.value; history.replaceState(null, "", "?event=" + eventId); load(true); });
+  $("printBtn").addEventListener("click", () => window.print());
+
+  /* ---------- charts ---------- */
+  function barChart(box, items, opts) {
+    box.replaceChildren();
+    if (!items.length) { box.append(el("div", "empty", opts.empty)); return; }
+    const max = Math.max(1, ...items.map((i) => i.v));
+    const wrap = el("div", "chart"), bars = el("div", "bars"), ticks = el("div", "ticks");
+    const every = Math.max(1, Math.ceil(items.length / 16));
+    items.forEach((it, i) => {
+      const b = el("div", "bar"), v = el("i");
+      v.style.height = Math.round((it.v / max) * (opts.h || 150)) + "px";
+      if (opts.color) v.style.background = opts.color(it.v);
+      if (it.peak) v.className = "peak";
+      b.title = time(it.t) + ": " + opts.label(it.v);
+      b.append(el("small", null, items.length <= 24 ? opts.short(it.v) : ""), v);
+      bars.append(b);
+      ticks.append(el("span", null, i % every === 0 ? time(it.t).replace(/\s?[AP]M$/i, "") : ""));
+    });
+    const inner = el("div"); inner.style.minWidth = Math.max(items.length * 26, 300) + "px";
+    inner.append(bars, ticks); wrap.append(inner); box.append(wrap);
+  }
+  const waitColor = (m) => (m > 15 ? "var(--w3)" : m >= 10 ? "var(--w2)" : "var(--w1)");
+
+  /* ---------- render ---------- */
+  function render() {
+    if (!data) return;
+    const ev = data.event || {}, cps = data.checkpoints || [], buckets = data.buckets || [], waits = data.wait_buckets || [];
+    const updates = (data.updates || []).filter((u) => !asClient || u.visible_to_client);
+    $("evName").textContent = ev.name || "No event";
+    $("evSub").textContent = [ev.client, ev.venue, ev.starts_at ? day(ev.starts_at) : ""].filter(Boolean).join(" · ");
+    document.title = (ev.name ? ev.name + " · " : "") + "Stapleton IQ";
+
+    // event picker
+    const sel = $("evSel");
+    sel.replaceChildren(...(data.events || []).map((e) => {
+      const o = el("option", null, e.name + (e.status === "live" ? " (live)" : "") + (e.client ? " · " + e.client : ""));
+      o.value = e.id; o.selected = e.id === ev.id; return o;
+    }));
+
+    // live status
+    const last = ev.last_received ? new Date(ev.last_received) : null;
+    const live = ev.status === "live" && last && Date.now() - last < 10 * 60000;
+    $("status").className = "status" + (live ? " live" : "");
+    $("statusTxt").innerHTML = "";
+    $("statusTxt").append(live ? el("b", null, "Live") : el("span", null, ev.status === "live" ? "Waiting for counts" : "Event " + (ev.status || "")),
+      document.createTextNode(last ? " · last count " + time(last) + " · refreshes every 30 seconds" : ""));
+
+    // tiles
+    const total = cps.reduce((a, c) => a + Number(c.total_in || 0), 0);
+    const last15 = cps.reduce((a, c) => a + Number(c.last15_in || 0), 0);
+    const peak = buckets.reduce((p, b) => (b.n > (p ? p.n : -1) ? b : p), null);
+    const withWait = cps.filter((c) => c.wait_now != null);
+    const waitNow = withWait.length ? Math.round(withWait.reduce((a, c) => a + Number(c.wait_now), 0) / withWait.length) : null;
+    const longest = waits.reduce((p, w) => (Number(w.wait) > (p ? Number(p.wait) : -1) ? w : p), null);
+    const reporting = cps.filter((c) => c.has_unit);
+    $("tTotal").textContent = fmt(total);
+    $("tTotalNote").textContent = buckets.length ? "since " + time(buckets[0].t) : "no counts yet";
+    $("tLast").textContent = fmt(last15);
+    $("tLastNote").textContent = "about " + Math.round(last15 / 15) + " people a minute";
+    $("tPeak").textContent = peak && peak.n ? fmt(peak.n) : "–";
+    $("tPeakNote").textContent = peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : " ";
+    $("tWait").textContent = waitNow == null ? "–" : waitNow + " min";
+    $("tWaitNote").textContent = waitNow == null ? "needs a line camera at this event" : longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : " ";
+    $("tCps").textContent = reporting.length + " of " + cps.length;
+    $("tCpsNote").textContent = reporting.length === cps.length ? "every checkpoint has a counter" : "some checkpoints have no counter";
+
+    // charts
+    const arr = buckets.map((b) => ({ t: b.t, v: Number(b.n), peak: peak && b.t === peak.t && b.n > 0 }));
+    barChart($("arrChart"), arr, { label: (v) => fmt(v) + " people", short: (v) => fmt(v), empty: "No counts yet for this event." });
+    $("waitLegend").hidden = !waits.length;
+    barChart($("waitChart"), waits.map((w) => ({ t: w.t, v: Number(w.wait) })),
+      { label: (v) => Math.round(v) + " min wait", short: (v) => Math.round(v) + "m", color: waitColor, h: 120,
+        empty: "No wait-time estimates yet. They appear once a counter at this event has a line zone set up." });
+
+    // checkpoint table
+    const maxCp = Math.max(1, ...cps.map((c) => Number(c.total_in)));
+    $("cpRows").replaceChildren(...cps.map((c) => {
+      const tr = el("tr"), pct = total ? Math.round((c.total_in / total) * 100) : 0;
+      const sh = el("div", "share"), tk = el("div", "track"), fill = el("i");
+      fill.style.width = Math.round((c.total_in / maxCp) * 100) + "%"; tk.append(fill); sh.append(tk, el("small", null, pct + "%"));
+      const shareTd = el("td"); shareTd.append(sh);
+      tr.append(el("td", null, c.name), el("td", "r", fmt(c.total_in)), el("td", "r", fmt(c.last15_in)),
+        el("td", "r", c.wait_now == null ? "–" : Math.round(c.wait_now) + " min"), shareTd);
+      return tr;
+    }));
+    if (!cps.length) { const tr = el("tr"), td = el("td", null, "No checkpoints set up for this event."); td.colSpan = 5; tr.append(td); $("cpRows").replaceChildren(tr); }
+
+    // updates (client-facing list)
+    const shown = (data.updates || []).filter((u) => u.visible_to_client);
+    $("updList").replaceChildren(...(shown.length ? shown.map((u) => updateRow(u, false)) : [el("div", "empty", "No updates shared yet.")]));
+
+    // report
+    const hours = buckets.length ? Math.max(0.25, buckets.length / 4) : 0;
+    const counted = cps.filter((c) => Number(c.total_in) > 0);
+    const busiest = counted.slice().sort((a, b) => b.total_in - a.total_in)[0];
+    const avgWait = waits.length ? Math.round(waits.reduce((a, w) => a + Number(w.wait), 0) / waits.length) : null;
+    const byCat = {};
+    updates.forEach((u) => { const k = u.category_label || "Other"; byCat[k] = (byCat[k] || 0) + 1; });
+    $("rTitle").textContent = (ev.name || "") + ": summary";
+    const fact = (label, value, note) => { const d = el("div"); d.append(el("span", "label", label), el("span", "num", value)); if (note) d.append(el("small", null, note)); return d; };
+    $("rFacts").replaceChildren(
+      fact("Total screened", fmt(total)),
+      fact("Busiest 15 minutes", peak && peak.n ? fmt(peak.n) : "–", peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : ""),
+      fact("Busiest checkpoint", busiest ? busiest.name : "–", busiest && total ? Math.round((busiest.total_in / total) * 100) + "% of arrivals" : ""),
+      fact("Avg per checkpoint per hour", counted.length && hours ? fmt(Math.round(total / counted.length / hours)) : "–"),
+      fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera"),
+      fact("Incidents logged", String(updates.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", ")));
+    barChart($("rChart"), arr, { label: (v) => fmt(v) + " people", short: (v) => fmt(v), empty: "No counts for this event." });
+    $("rInc").replaceChildren(...(updates.length ? updates.map((u) => updateRow(u, false)) : [el("div", "empty", asClient ? "No incident reports shared with the client." : "No incident reports for this event.")]));
+
+    // all events
+    $("evList").replaceChildren(...(data.events || []).map((e) => {
+      const a = el("a"); a.href = "?event=" + e.id;
+      const l = el("div"); l.append(el("b", null, e.name), el("small", null, [e.client, day(e.starts_at), e.status === "live" ? "live now" : e.status].filter(Boolean).join(" · ")));
+      a.append(l, el("span", null, fmt(e.total_in) + " screened"));
+      a.addEventListener("click", (x) => { x.preventDefault(); eventId = e.id; history.replaceState(null, "", "?event=" + e.id); showTab("Live"); load(true); });
+      return a;
+    }));
+
+    // incidents tab (staff)
+    fillForm(cps);
+    const all = data.updates || [];
+    $("incList").replaceChildren(...(all.length ? all.map((u) => updateRow(u, true)) : [el("div", "empty", "No reports yet for this event.")]));
+  }
+
+  function updateRow(u, staffTools) {
+    const d = el("div", "upd"), meta = el("div", "meta");
+    meta.append(el("span", null, time(u.at)), el("span", "chip", u.category_label || "Update"));
+    if (u.severity && u.severity !== "low") meta.append(el("span", "chip " + u.severity, u.severity === "high" ? "High" : "Medium"));
+    if (staffTools && u.visible_to_client) meta.append(el("span", "chip shared", "Shared with client"));
+    d.append(meta);
+    const where = u.checkpoint || u.location;
+    const line = [where ? "At " + where : "", u.action_taken ? u.action_taken : "", u.police_notified ? "Police/EMS notified" : ""].filter(Boolean).join(" · ");
+    if (line) d.append(el("small", null, line));
+    if (u.note) d.append(el("span", null, u.note));
+    if (staffTools) {
+      if (u.by_name) d.append(el("small", null, "Logged by " + u.by_name));
+      const acts = el("div", "acts");
+      const sh = el("button", null, u.visible_to_client ? "Hide from client" : "Show to client"); sh.type = "button";
+      sh.addEventListener("click", async () => {
+        sh.disabled = true;
+        try { await IQ.rpc("web_incident_share", { p_id: u.id, p_visible: !u.visible_to_client }); await load(); }
+        catch (e) { $("err").textContent = IQ.explain(e); sh.disabled = false; }
+      });
+      acts.append(sh);
+      if (u.has_photo) {
+        const ph = el("button", null, "Show photo"); ph.type = "button";
+        ph.addEventListener("click", async () => {
+          try { const b64 = await IQ.rpc("web_incident_photo", { p_id: u.id }); const im = el("img"); im.alt = "Incident photo"; im.src = "data:image/jpeg;base64," + b64; ph.replaceWith(im); }
+          catch (e) { $("err").textContent = IQ.explain(e); }
+        });
+        acts.append(ph);
+      }
+      d.append(acts);
+    }
+    return d;
+  }
+
+  /* ---------- incident form ---------- */
+  const form = $("incForm");
+  let formFor = null, photo = null;
+  const nowLocal = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  function fillForm(cps) {
+    if (formFor === (data.event && data.event.id)) return;
+    formFor = data.event && data.event.id;
+    form.where.replaceChildren(...cps.map((c) => { const o = el("option", null, c.name); o.value = "cp:" + c.id; return o; }),
+      ...["Inside the venue", "Outside / in line", "Entrance", "Other"].map((n) => { const o = el("option", null, n); o.value = "loc:" + n; return o; }));
+    form.category.replaceChildren(...(data.categories || []).map((c) => { const o = el("option", null, c.label); o.value = c.code; return o; }));
+    if (!form.when.value) form.when.value = nowLocal();
+  }
+  function shrink(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const s = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        let q = 0.7, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 650000 && q > 0.3) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+        resolve(out.split(",")[1]);
+      };
+      img.onerror = () => reject(new Error("That photo couldn't be read."));
+      img.src = url;
+    });
+  }
+  form.photo.addEventListener("change", async () => {
+    const f = form.photo.files[0]; photo = null; $("incPreview").hidden = true;
+    if (!f) return;
+    try { photo = await shrink(f); $("incPreview").src = "data:image/jpeg;base64," + photo; $("incPreview").hidden = false; }
+    catch (e) { $("incMsg").className = "msg bad"; $("incMsg").textContent = e.message; }
+  });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = $("incMsg"), btn = form.querySelector("button[type=submit]");
+    const where = form.where.value || "";
+    if (!form.note.value.trim()) { msg.className = "msg bad"; msg.textContent = "Say what happened before saving."; form.note.focus(); return; }
+    btn.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
+    try {
+      await IQ.rpc("web_incident_save", { p: {
+        event_id: data.event.id,
+        checkpoint_id: where.startsWith("cp:") ? where.slice(3) : null,
+        location: where.startsWith("loc:") ? where.slice(4) : null,
+        category: form.category.value, severity: form.severity.value, action_taken: form.action.value,
+        note: form.note.value.trim(), police_notified: form.police.checked, visible_to_client: form.share.checked,
+        occurred_at: form.when.value ? new Date(form.when.value).toISOString() : null, photo_b64: photo } });
+      form.reset(); photo = null; $("incPreview").hidden = true; form.when.value = nowLocal();
+      msg.className = "msg good"; msg.textContent = "Report saved.";
+      await load();
+    } catch (err) {
+      msg.className = "msg bad";
+      msg.textContent = /photo_too_big/.test(err.message) ? "That photo is too big. Try a smaller one." :
+                        /bad_date/.test(err.message) ? "Check the date and time." : IQ.explain(err);
+    } finally { btn.disabled = false; }
+  });
+
+  /* ---------- data ---------- */
+  async function load(fresh) {
+    try {
+      data = await IQ.rpc("web_client_view", { p_event_id: eventId });
+      eventId = data.event && data.event.id;
+      if (fresh) formFor = null;
+      $("err").textContent = "";
+      render();
+    } catch (e) { $("err").textContent = IQ.explain(e); if (!data) $("evName").textContent = "Client view"; }
+  }
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(async () => { if (!document.hidden && tab !== "Incidents") await load(); schedule(); }, 30000); };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+  await load(true);
+  schedule();
+})();
+</script>
+</body>
+</html>

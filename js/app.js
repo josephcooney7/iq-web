@@ -30,9 +30,10 @@ window.IQ = (() => {
     bar.innerHTML = `
       <a class="iq-brand" href="/">Stapleton&nbsp;IQ</a>
       <span class="iq-links">
-        <a href="/dashboard" ${active === "dashboard" ? 'aria-current="page"' : ""}>Dashboard</a>
+        <a href="/dashboard" data-dash ${active === "dashboard" ? 'aria-current="page"' : ""}>Dashboard</a>
         <a href="/setup" data-staff ${active === "setup" ? 'aria-current="page"' : ""}>Setup</a>
-        <a href="/gear" data-staff ${active === "gear" ? 'aria-current="page"' : ""}>Equipment</a>
+        <a href="/client" data-staff ${active === "client" ? 'aria-current="page"' : ""}>Client view</a>
+        <a href="/gear" data-field ${active === "gear" ? 'aria-current="page"' : ""}>Equipment</a>
       </span>
       <button type="button" class="iq-out" hidden>Sign out</button>`;
     document.body.prepend(bar);
@@ -105,7 +106,9 @@ window.IQ = (() => {
     });
   }
 
-  /* Wait for a signed-in user. Returns { email, role, staff }. */
+  /* Wait for a signed-in user. Returns { email, role, staff, field, dash }.
+     Roles: admin + manager (staff) see everything; field_tech (Field Tech) sees Equipment only;
+     client sees its own dashboard only. */
   let recovering = false;
   sb.auth.onAuthStateChange((evt) => { if (evt === "PASSWORD_RECOVERY") recovering = true; });
 
@@ -117,15 +120,16 @@ window.IQ = (() => {
     else if (!data.session) await loginScreen(location.hash === "#join" ? "signup" : "signin");
     let me;
     try { me = await rpc("web_me"); } catch (e) { me = { signed_in: true, staff: false, role: null, error: e }; }
+    me.field = !!(me.staff || me.field);
+    me.dash = !!(me.staff || me.role === "client");
     if (bar) {
       bar.querySelector(".iq-out").hidden = false;
       if (!me.staff) bar.querySelectorAll("[data-staff]").forEach((a) => (a.hidden = true));
+      if (!me.dash) bar.querySelectorAll("[data-dash]").forEach((a) => (a.hidden = true));
+      if (!me.field) bar.querySelectorAll("[data-field]").forEach((a) => (a.hidden = true));
     }
-    if (opts.staff && !me.staff) {
-      noAccess(me);
-      throw new Error("no_access");
-    }
-    if (!opts.staff && !me.staff && !me.role) {
+    const ok = opts.staff ? me.staff : opts.field ? me.field : opts.dash ? me.dash : (me.dash || me.field);
+    if (!ok) {
       noAccess(me);
       throw new Error("no_access");
     }
@@ -148,5 +152,8 @@ window.IQ = (() => {
     window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
   }
 
-  return { sb, rpc, explain, topbar, requireLogin };
+  const ROLE_NAMES = { admin: "Admin", manager: "Manager", field_tech: "Field Tech", client: "Client" };
+  const roleName = (r) => ROLE_NAMES[r] || r || "";
+
+  return { sb, rpc, explain, topbar, requireLogin, roleName };
 })();

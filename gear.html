@@ -54,7 +54,7 @@
   <div class="panel">
     <h2>All equipment</h2>
     <div class="list" id="all"></div>
-    <div class="links"><a class="link" href="/gear-stickers">Print QR stickers</a></div>
+    <div class="links" id="stickLinks" hidden><a class="link" href="/gear-stickers">Print QR stickers</a></div>
   </div>
   <p class="msg bad" id="err"></p>
 </main>
@@ -65,7 +65,8 @@
 (async () => {
   const $ = (id) => document.getElementById(id);
   const bar = IQ.topbar("gear");
-  try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  let me; try { me = await IQ.requireLogin({ field: true, bar }); } catch { return; }
+  $("stickLinks").hidden = !me.staff;
   let data;
   try { data = await IQ.rpc("web_gear_list"); } catch (e) { $("err").textContent = IQ.explain(e); return; }
 

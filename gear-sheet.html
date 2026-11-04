@@ -60,7 +60,7 @@ td.ser { font-weight: 600; width: 110px; }
 (async () => {
   const $ = (id) => document.getElementById(id);
   const bar = IQ.topbar("gear");
-  try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  try { await IQ.requireLogin({ field: true, bar }); } catch { return; }
   const params = new URLSearchParams(location.search);
   let list;
   try { list = await IQ.rpc("web_gear_list"); } catch (e) { $("err").textContent = IQ.explain(e); return; }
