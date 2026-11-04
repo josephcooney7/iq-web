@@ -158,7 +158,7 @@
       r.innerHTML = '<span class="xname"></span><span class="qty"><button type="button" data-d="-1" aria-label="One less">−</button><b>0</b><button type="button" data-d="1" aria-label="One more">+</button></span>';
       r.querySelector(".xname").textContent = name; r.dataset.name = name;
       const v = r.querySelector("b"), set = (n) => { n = Math.max(0, Math.min(10, n)); v.textContent = n; r.dataset.qty = n; r.classList.toggle("on", n > 0); };
-      set(out ? (wentOut[name] || 0) : 0);
+      set(out ? (wentOut[name] || 0) : (GEAR.EXTRA_MIN[name] || 0));
       r.querySelectorAll("button").forEach((bt) => (bt.onclick = () => set(Number(r.dataset.qty) + Number(bt.dataset.d))));
       return r;
     }));
