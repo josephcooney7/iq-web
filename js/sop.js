@@ -48,7 +48,7 @@ window.showSop = function (kind, needAck) {
       <h3 data-t="title"></h3>
       ${sop.draft ? '<p class="draft">Draft: Joe is still checking this wording.</p>' : ""}
       <div class="sopbody"></div>
-      ${needAck ? '<label class="ack"><input type="checkbox"> I've read and understand the SOP</label>' : ""}
+      ${needAck ? '<label class="ack"><input type="checkbox"> I’ve read and understand the SOP</label>' : ""}
       <div class="sopbtns">
         ${needAck ? '<button type="button" class="cancel">Back</button>' : ""}
         <button type="submit" class="primary go">${needAck ? "I understand, sign out" : "Close"}</button>
