@@ -2,7 +2,7 @@
    To change the wording, edit the steps below and bump "version" so the sheet shows which one was read. */
 window.GEAR_SOP = {
   OpenGate: {
-    version: "2026-11-04c",
+    version: "2026-11-04d",
     title: "OpenGate SOP",
     draft: false,
     sections: [
@@ -18,14 +18,7 @@ window.GEAR_SOP = {
         "The Stapleton branded socks stay on every gate.",
         "Turn the gates on and wait for the start-up check to finish.",
         "Set each gate to the standard 2B setting with sensitivity 0, unless otherwise authorized.",
-        "Walk the operational test piece through each gate and confirm it alarms before the doors open.",
-        "Tell your supervisor the gates are ready."
-      ] },
-      { h: "During the event", steps: [
-        "Never leave a gate unattended while it's set up.",
-        "Keep drinks and liquids away from the gates.",
-        "Swap batteries before they run flat, and keep spares charged.",
-        "Report any problem to your supervisor right away."
+        "Walk the operational test piece through each gate and confirm it alarms before the doors open."
       ] },
       { h: "Packing up and returning", steps: [
         "Turn the gates off and wipe them down.",
@@ -36,7 +29,7 @@ window.GEAR_SOP = {
         "Return the gates in this app: scan a sticker, tick every gate coming back, and enter what came back."
       ] },
       { h: "If a gate is damaged or not working", steps: [
-        "Stop using that gate and tell your supervisor.",
+        "Stop using that gate.",
         "In this app, mark it Damaged. Say what's wrong and add a photo.",
         "Don't sign a damaged gate out again until it's fixed and returned as OK."
       ] }
