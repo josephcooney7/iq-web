@@ -2,13 +2,13 @@
    To change the wording, edit the steps below and bump "version" so the sheet shows which one was read. */
 window.GEAR_SOP = {
   OpenGate: {
-    version: "2026-11-04",
+    version: "2026-11-04b",
     title: "OpenGate SOP",
     draft: false,
     sections: [
       { h: "Before you leave", steps: [
         "Check each gate for cracks, loose panels and damaged cables. If anything is wrong, mark that gate Damaged and add a photo.",
-        "Make sure every battery is fully charged, and count them.",
+        "Take 5 fully charged batteries for each OpenGate set, and count them.",
         "Put every gate in its protective sleeve for transport, every time. Lift with two people.",
         "Load at least 1 table, 1 handheld wand and 3 baskets with the gates."
       ] },
