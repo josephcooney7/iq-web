@@ -428,7 +428,7 @@ th { color: var(--ink-3); font-weight: 600; }
 
   const bar = IQ.topbar("dashboard");
   const boot = async () => {
-    try { await IQ.requireLogin({ bar }); } catch { return; }
+    try { await IQ.requireLogin({ dash: true, bar }); } catch { return; }
     ready = true; mode = "live";
     await tick(true);
     schedule();

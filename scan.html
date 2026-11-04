@@ -78,7 +78,7 @@
 (async () => {
   const $ = (id) => document.getElementById(id);
   const bar = IQ.topbar("gear");
-  try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
+  try { await IQ.requireLogin({ field: true, bar }); } catch { return; }
   const code = decodeURIComponent((location.pathname.match(/^\/g\/([^/]+)/) || [])[1] || new URLSearchParams(location.search).get("code") || "");
   if (!code) { location.replace("/gear"); return; }
   const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
