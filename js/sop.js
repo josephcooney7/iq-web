@@ -2,20 +2,19 @@
    To change the wording, edit the steps below and bump "version" so the sheet shows which one was read. */
 window.GEAR_SOP = {
   OpenGate: {
-    version: "2026-11-04b",
+    version: "2026-11-04c",
     title: "OpenGate SOP",
     draft: false,
     sections: [
       { h: "Before you leave", steps: [
         "Check each gate for cracks, loose panels and damaged cables. If anything is wrong, mark that gate Damaged and add a photo.",
         "Take 5 fully charged batteries for each OpenGate set, and count them.",
-        "Put every gate in its protective sleeve for transport, every time. Lift with two people.",
+        "Put every gate in its protective sleeve for transport, every time.",
         "Load at least 1 table, 1 handheld wand, 3 baskets and the operational test piece with the gates."
       ] },
       { h: "Setting up on site", steps: [
         "Set the gates on flat, level ground.",
         "Keep them away from large metal objects, doors, and power cables. These can cause false alarms.",
-        "Leave enough space between gates and lanes so guests line up in single file.",
         "The Stapleton branded socks stay on every gate.",
         "Turn the gates on and wait for the start-up check to finish.",
         "Set each gate to the standard 2B setting with sensitivity 0, unless otherwise authorized.",
@@ -31,7 +30,7 @@ window.GEAR_SOP = {
       { h: "Packing up and returning", steps: [
         "Turn the gates off and wipe them down.",
         "Check each gate again for damage.",
-        "Put every gate back in its protective sleeve for transport. Lift with two people.",
+        "Put every gate back in its protective sleeve for transport.",
         "Count the batteries, tables, wands and baskets.",
         "Back at the warehouse, put the batteries on charge.",
         "Return the gates in this app: scan a sticker, tick every gate coming back, and enter what came back."
