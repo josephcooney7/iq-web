@@ -52,6 +52,7 @@ window.IQ = (() => {
         const titles = { signin: "Sign in", signup: "Create your login", forgot: "Reset password", newpass: "Choose a new password" };
         wrap.innerHTML = `
           <form class="iq-card" novalidate>
+            <img class="iq-logo" src="/icons/stapleton-logo.jpg" alt="Stapleton Security Services" width="760" height="268">
             <div class="iq-mark">Stapleton IQ</div>
             <h1>${titles[view]}</h1>
             ${view === "signup" ? `<label>Full name<input name="fullname" type="text" autocomplete="name" maxlength="80" required></label>` : ""}
