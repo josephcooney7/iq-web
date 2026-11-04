@@ -32,7 +32,7 @@ window.IQ = (() => {
       <span class="iq-links">
         <a href="/dashboard" data-dash hidden ${active === "dashboard" ? 'aria-current="page"' : ""}>Dashboard</a>
         <a href="/setup" data-staff hidden ${active === "setup" ? 'aria-current="page"' : ""}>Setup</a>
-        <a href="/client" data-staff hidden ${active === "client" ? 'aria-current="page"' : ""}>Client view</a>
+        <a href="/client" data-cv hidden ${active === "client" ? 'aria-current="page"' : ""}>Client view</a>
         <a href="/gear" data-field hidden ${active === "gear" ? 'aria-current="page"' : ""}>Equipment</a>
       </span>
       <button type="button" class="iq-out" hidden>Sign out</button>`;
@@ -108,7 +108,7 @@ window.IQ = (() => {
 
   /* Wait for a signed-in user. Returns { email, role, staff, field, dash }.
      Roles: admin + manager (staff) see everything; field_tech (Field Tech) sees Equipment only;
-     client sees its own dashboard only. */
+     client sees Client view for its own approved events only (Dashboard is Stapleton's own page). */
   let recovering = false;
   sb.auth.onAuthStateChange((evt) => { if (evt === "PASSWORD_RECOVERY") recovering = true; });
 
@@ -121,18 +121,21 @@ window.IQ = (() => {
     let me;
     try { me = await rpc("web_me"); } catch (e) { me = { signed_in: true, staff: false, role: null, error: e }; }
     me.field = !!(me.staff || me.field);
-    me.dash = !!(me.staff || me.role === "client");
+    me.client = !me.staff && me.role === "client";
+    me.dash = !!me.staff;
+    me.cv = !!(me.staff || me.client);
     // Tabs start hidden and only appear for roles that can use them, so nobody sees a tab they can't open.
     if (bar) {
       bar.querySelector(".iq-out").hidden = false;
       bar.querySelectorAll("[data-staff]").forEach((a) => (a.hidden = !me.staff));
       bar.querySelectorAll("[data-dash]").forEach((a) => (a.hidden = !me.dash));
+      bar.querySelectorAll("[data-cv]").forEach((a) => (a.hidden = !me.cv));
       bar.querySelectorAll("[data-field]").forEach((a) => (a.hidden = !me.field));
     }
-    const ok = opts.staff ? me.staff : opts.field ? me.field : opts.dash ? me.dash : (me.dash || me.field);
+    const ok = opts.staff ? me.staff : opts.field ? me.field : opts.dash ? me.dash : opts.cv ? me.cv : (me.dash || me.field || me.cv);
     if (!ok) {
       // A page they can't use (e.g. a typed-in link): send them to the page they can use instead of a dead end.
-      const home = me.field ? "/gear" : me.dash ? "/dashboard" : null;
+      const home = me.field ? "/gear" : me.client ? "/client" : me.dash ? "/dashboard" : null;
       if (home && location.pathname !== home) { location.replace(home); throw new Error("no_access"); }
       noAccess(me);
       throw new Error("no_access");
