@@ -2,6 +2,8 @@
 window.GEAR = (() => {
   // Other gear that goes out with the gates, ticked on each sign-out / return.
   const EXTRAS = ["Table", "Handheld wand", "Baskets"];
+  // SOP: every sign-out takes at least this many. The sign-out counters start here.
+  const EXTRA_MIN = { "Table": 1, "Handheld wand": 1, "Baskets": 3 };
   // Saved extras are [{name, qty}] (older sheets: ["Table"] = 1 each). Returns {name: qty}.
   function xmap(list) {
     const m = {};
@@ -91,7 +93,7 @@ window.GEAR = (() => {
   function batchText(b) {
     if (!b) return "";
     return [b.location, b.batteries != null ? b.batteries + " batter" + (b.batteries === 1 ? "y" : "ies") : "",
-      xtext(b.extras),
+      xtext(b.extras), b.sop_read ? "read the SOP" : "",
       b.date_out ? "out " + day(b.date_out) : "", b.date_back ? "back " + day(b.date_back) : ""].filter(Boolean).join(" · ");
   }
 
@@ -118,5 +120,5 @@ window.GEAR = (() => {
     }));
   }
 
-  return { EXTRAS, xmap, xtext, when, fill, row, history, shrink, day, batchText };
+  return { EXTRAS, EXTRA_MIN, xmap, xtext, when, fill, row, history, shrink, day, batchText };
 })();

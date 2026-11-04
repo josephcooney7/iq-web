@@ -62,6 +62,7 @@
       <a class="link" href="/gear">All equipment</a>
     </div>
   </div>
+  <div class="links" id="sopLinkBox" hidden><a class="link" href="#" id="sopLink">Read the SOP</a></div>
 
   <div class="panel" id="histPanel" hidden>
     <h2 id="histTitle">History for this unit</h2>
@@ -72,6 +73,7 @@
 <script src="/js/supabase.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/gear.js"></script>
+<script src="/js/sop.js"></script>
 <script>
 (async () => {
   const $ = (id) => document.getElementById(id);
@@ -156,7 +158,7 @@
       r.innerHTML = '<span class="xname"></span><span class="qty"><button type="button" data-d="-1" aria-label="One less">−</button><b>0</b><button type="button" data-d="1" aria-label="One more">+</button></span>';
       r.querySelector(".xname").textContent = name; r.dataset.name = name;
       const v = r.querySelector("b"), set = (n) => { n = Math.max(0, Math.min(10, n)); v.textContent = n; r.dataset.qty = n; r.classList.toggle("on", n > 0); };
-      set(out ? (wentOut[name] || 0) : 0);
+      set(out ? (wentOut[name] || 0) : (GEAR.EXTRA_MIN[name] || 0));
       r.querySelectorAll("button").forEach((bt) => (bt.onclick = () => set(Number(r.dataset.qty) + Number(bt.dataset.d))));
       return r;
     }));
@@ -184,13 +186,15 @@
       const fullname = data.needs_name ? f.fullname.value.trim() : "";
       if (data.needs_name && fullname.length < 2) return bad("Type your full name first. You only do this once.", f.fullname);
       const batteries = parseInt(f.batteries.value, 10);
+      const sop = action === "out" && window.GEAR_SOP && GEAR_SOP[it.kind];
+      if (sop && !(await showSop(it.kind, true))) return bad("Tick “I understand” on the SOP to sign out.");
       $("go").disabled = true; $("go").textContent = "Saving…";
       try {
         if (fullname) { await IQ.rpc("web_set_my_name", { p_name: fullname }); data.needs_name = false; $("nameBox").hidden = true; }
         const extras = [...$("extras").querySelectorAll(".xrow")].map((r) => ({ name: r.dataset.name, qty: Number(r.dataset.qty) })).filter((x) => x.qty > 0);
         const res = await IQ.rpc("web_gear_save", { p: {
           action, event_name: ev, location: f.location.value.trim(), batteries: isNaN(batteries) ? null : batteries, extras,
-          date_out: f.dateout.value || null, date_back: f.dateback.value || null, items: picked.map((r) => r.value()) } });
+          date_out: f.dateout.value || null, date_back: f.dateback.value || null, sop_read: sop ? sop.version : null, items: picked.map((r) => r.value()) } });
         const dmg = picked.filter((r) => r.value().condition === "damaged").length;
         $("doneTxt").textContent = `${picked.length} ${it.kind}${picked.length > 1 ? "s" : ""} (${picked.map((r) => r.serial).join(", ")}) ` +
           `${action === "out" ? "signed out to" : "returned from"} ${ev}` + (isNaN(batteries) || !batteries ? "" : `, ${batteries} batter${batteries === 1 ? "y" : "ies"}`) + (extras.length ? ", plus " + GEAR.xtext(extras).toLowerCase() : "") +
@@ -202,6 +206,11 @@
         bad(/back_before_out/.test(err.message) ? "Date back can't be before date out." : /bad_date/.test(err.message) ? "Check the dates." : IQ.explain(err));
       } finally { $("go").disabled = false; $("go").textContent = out ? "Return" : "Sign out"; }
     };
+    // SOP: link always there; on sign-out it pops up and must be ticked before saving.
+    const hasSop = !!(window.GEAR_SOP && GEAR_SOP[it.kind]);
+    $("sopLinkBox").hidden = !hasSop;
+    $("sopLink").textContent = "Read the " + it.kind + " SOP";
+    $("sopLink").onclick = (e) => { e.preventDefault(); showSop(it.kind, false); };
     history();
   }
 
