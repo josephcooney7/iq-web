@@ -10,7 +10,7 @@ window.GEAR_SOP = {
         "Check each gate for cracks, loose panels and damaged cables. If anything is wrong, mark that gate Damaged and add a photo.",
         "Take 5 fully charged batteries for each OpenGate set, and count them.",
         "Put every gate in its protective sleeve for transport, every time. Lift with two people.",
-        "Load at least 1 table, 1 handheld wand and 3 baskets with the gates."
+        "Load at least 1 table, 1 handheld wand, 3 baskets and the operational test piece with the gates."
       ] },
       { h: "Setting up on site", steps: [
         "Set the gates on flat, level ground.",
@@ -19,7 +19,7 @@ window.GEAR_SOP = {
         "The Stapleton branded socks stay on every gate.",
         "Turn the gates on and wait for the start-up check to finish.",
         "Set each gate to the standard 2B setting with sensitivity 0, unless otherwise authorized.",
-        "Walk a test item through each gate and confirm it alarms before the doors open.",
+        "Walk the operational test piece through each gate and confirm it alarms before the doors open.",
         "Tell your supervisor the gates are ready."
       ] },
       { h: "During the event", steps: [
