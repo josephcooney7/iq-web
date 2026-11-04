@@ -83,8 +83,7 @@
   // Start on the event that has gear out right now (newest first), so there's nothing to pick.
   const outNow = data.items.filter((it) => it.state === "out" && it.event_name).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
   if (outNow.length && data.event_names.includes(outNow[0].event_name)) sel.value = outNow[0].event_name;
-  else if (data.event_names.length) sel.value = data.event_names[0];
-  $("evNote").textContent = outNow.length ? "" : "Nothing is signed out right now. Showing the last event; pick another to check it.";
+  $("evNote").textContent = outNow.length ? "" : "Nothing is signed out right now. Pick a past event to check it.";
   if (!data.event_names.length) $("evNote").textContent = "Nothing has been signed out yet. Once gates go out, this shows what came back.";
   sel.onchange = check; check();
 
