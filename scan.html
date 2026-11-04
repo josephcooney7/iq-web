@@ -187,7 +187,7 @@
       if (data.needs_name && fullname.length < 2) return bad("Type your full name first. You only do this once.", f.fullname);
       const batteries = parseInt(f.batteries.value, 10);
       const sop = action === "out" && window.GEAR_SOP && GEAR_SOP[it.kind];
-      if (sop && !(await showSop(it.kind, true))) return bad("Read the SOP and tick the box to sign out.");
+      if (sop && !(await showSop(it.kind, true))) return bad("Tick “I understand” on the SOP to sign out.");
       $("go").disabled = true; $("go").textContent = "Saving…";
       try {
         if (fullname) { await IQ.rpc("web_set_my_name", { p_name: fullname }); data.needs_name = false; $("nameBox").hidden = true; }

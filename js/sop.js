@@ -41,10 +41,10 @@ window.showSop = function (kind, needAck) {
       <h3 data-t="title"></h3>
       ${sop.draft ? '<p class="draft">Draft: Joe is still checking this wording.</p>' : ""}
       <div class="sopbody"></div>
-      ${needAck ? '<label class="ack"><input type="checkbox"> I\'ve read this and will follow it</label>' : ""}
+      ${needAck ? '<label class="ack"><input type="checkbox"> I understand and will follow this SOP</label>' : ""}
       <div class="sopbtns">
         ${needAck ? '<button type="button" class="cancel">Back</button>' : ""}
-        <button type="submit" class="primary go">${needAck ? "Continue" : "Close"}</button>
+        <button type="submit" class="primary go">${needAck ? "I understand, sign out" : "Close"}</button>
       </div></form>`;
     d.querySelector("[data-t=title]").textContent = sop.title;
     const body = d.querySelector(".sopbody");
