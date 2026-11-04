@@ -7,7 +7,7 @@ window.GEAR_SOP = {
     draft: false,
     sections: [
       { h: "Before you leave", steps: [
-        "Check each gate for cracks, loose panels and damaged cables. If anything is wrong, mark that gate Damaged and add a photo.",
+        "Check each gate for cracks and loose panels. If anything is wrong, mark that gate Damaged and add a photo.",
         "Take 5 fully charged batteries for each OpenGate set, and count them.",
         "Put every gate in its protective sleeve for transport, every time.",
         "Load at least 1 table, 1 handheld wand, 3 baskets and the operational test piece with the gates."
