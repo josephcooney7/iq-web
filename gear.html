@@ -37,6 +37,7 @@
     <label class="f" style="margin-top:0">Event
       <select id="ev"><option value="">Pick an event…</option></select>
     </label>
+    <p class="sub" id="evNote" style="margin:8px 0 0"></p>
     <div id="checkOut" hidden>
       <div class="check" style="margin-top:12px">
         <div><span class="big-num" id="nOut">0</span><small>Went out</small></div>
@@ -79,14 +80,16 @@
 
   const sel = $("ev");
   data.event_names.forEach((n) => sel.appendChild(Object.assign(document.createElement("option"), { value: n, textContent: n })));
-  const saved = (() => { try { return localStorage.getItem("iq-gear-event"); } catch { return null; } })();
-  if (saved && data.event_names.includes(saved)) sel.value = saved;
+  // Start on the event that has gear out right now (newest first), so there's nothing to pick.
+  const outNow = data.items.filter((it) => it.state === "out" && it.event_name).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  if (outNow.length && data.event_names.includes(outNow[0].event_name)) sel.value = outNow[0].event_name;
   else if (data.event_names.length) sel.value = data.event_names[0];
+  $("evNote").textContent = outNow.length ? "" : "Nothing is signed out right now. Showing the last event; pick another to check it.";
+  if (!data.event_names.length) $("evNote").textContent = "Nothing has been signed out yet. Once gates go out, this shows what came back.";
   sel.onchange = check; check();
 
   async function check() {
     const ev = sel.value; $("checkOut").hidden = !ev; if (!ev) return;
-    try { localStorage.setItem("iq-gear-event", ev); } catch {}
     $("sheetLink").href = "/gear-sheet?event=" + encodeURIComponent(ev);
     let moves;
     try { moves = await IQ.rpc("web_gear_history", { p_event_name: ev }); } catch (e) { $("err").textContent = IQ.explain(e); return; }
