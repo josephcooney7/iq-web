@@ -384,8 +384,10 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     $("tPeakNote").textContent = peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : " ";
     $("tWait").textContent = waitNow == null ? "–" : waitNow + " min";
     $("tWaitNote").textContent = waitNow == null ? "needs a line camera at this event" : longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : " ";
-    $("tCps").textContent = reporting.length + " of " + cps.length;
-    $("tCpsNote").textContent = reporting.length === cps.length ? "every checkpoint has a counter" : "some checkpoints have no counter";
+    // Checkpoints with no camera (e.g. Lanes 5-6 staffed but not counted) are listed, not counted as "not reporting".
+    const noCam = cps.filter((c) => !c.has_unit);
+    $("tCps").textContent = reporting.length + " of " + reporting.length;
+    $("tCpsNote").textContent = noCam.length ? "no camera at " + noCam.map((c) => c.name).join(", ") : "every checkpoint has a counter";
 
     // charts
     const arr = buckets.map((b) => ({ t: b.t, v: Number(b.n), peak: peak && b.t === peak.t && b.n > 0 }));
@@ -402,6 +404,10 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       const sh = el("div", "share"), tk = el("div", "track"), fill = el("i");
       fill.style.width = Math.round((c.total_in / maxCp) * 100) + "%"; tk.append(fill); sh.append(tk, el("small", null, pct + "%"));
       const shareTd = el("td"); shareTd.append(sh);
+      if (!c.has_unit) {
+        const td = el("td", null, "No camera at this checkpoint"); td.colSpan = 4; td.style.color = "var(--ink-3)";
+        tr.append(el("td", null, c.name), td); return tr;
+      }
       tr.append(el("td", null, c.name), el("td", "r", fmt(c.total_in)), el("td", "r", fmt(c.last15_in)),
         el("td", "r", c.wait_now == null ? "–" : Math.round(c.wait_now) + " min"), shareTd);
       return tr;
