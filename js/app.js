@@ -31,6 +31,7 @@ window.IQ = (() => {
       <a class="iq-brand" href="/">Stapleton&nbsp;IQ</a>
       <span class="iq-links">
         <a href="/dashboard" data-dash hidden ${active === "dashboard" ? 'aria-current="page"' : ""}>Dashboard</a>
+        <a href="/schedule" data-staff hidden ${active === "schedule" ? 'aria-current="page"' : ""}>Schedule</a>
         <a href="/setup" data-staff hidden ${active === "setup" ? 'aria-current="page"' : ""}>Setup</a>
         <a href="/client" data-cv hidden ${active === "client" ? 'aria-current="page"' : ""}>Client view</a>
         <a href="/gear" data-field hidden ${active === "gear" ? 'aria-current="page"' : ""}>Equipment</a>
