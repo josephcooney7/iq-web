@@ -103,7 +103,7 @@ window.SCHED = (() => {
         location: txt(get("location")),
         lead: txt(get("lead")),
         staffing: /^(un|not|no)/i.test(staffing) ? "Unstaffed" : /staff/i.test(staffing) ? "Staffed" : "",
-        threat_level: /low/i.test(threat) ? "Low" : /med|mod/i.test(threat) ? "Medium" : /high|elev|crit/i.test(threat) ? "High" : "",
+        threat_level: /^(10|[1-9])(\.0+)?$/.test(threat) ? String(parseInt(threat, 10)) : "",
         notes: txt(get("notes"))
       });
     });
@@ -162,7 +162,8 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     const svcTags = keys.length ? S.SVC.filter((s) => keys.includes(s.key)).map((s) => `<span class="tag svc">${s.short}</span>`).join("")
       : e.services ? `<span class="tag svc">${esc(e.services)}</span>` : "";
     const staff = e.staffing === "Staffed" ? `<span class="tag in">Staffed</span>` : e.staffing === "Unstaffed" ? `<span class="tag dmg">Unstaffed</span>` : `<span class="tag blank">Staffing not set</span>`;
-    const th = e.threat_level ? `<span class="tag ${e.threat_level === "High" ? "dmg" : e.threat_level === "Medium" ? "med" : "in"}">Threat: ${e.threat_level}</span>` : `<span class="tag blank">Threat not set</span>`;
+    const tn = +e.threat_level;
+    const th = tn ? `<span class="tag ${tn >= 7 ? "dmg" : tn >= 4 ? "med" : "in"}">Threat: ${tn}/10</span>` : `<span class="tag blank">Threat not set</span>`;
     b.innerHTML = `<div class="row1"><span class="when">${esc(S.whenText(e))}</span><span class="client">${esc(e.client)}</span></div>
       <div class="meta">${[e.location, e.times].filter(Boolean).map(esc).join("<br>")}</div>
       <div class="meta">Lead: ${e.lead ? "<b>" + esc(e.lead) + "</b>" : "not set"}</div>
@@ -262,11 +263,16 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     $("rmBtn").hidden = !e; $("edErr").textContent = "";
     form.start_date.value = e ? e.start_date : selDay || "";
     form.end_date.value = e && e.end_date !== e.start_date ? e.end_date : "";
-    ["client", "contact", "times", "location", "lead", "notes"].forEach((k) => (form[k].value = (e && e[k]) || ""));
+    ["client", "contact", "times", "location", "notes"].forEach((k) => (form[k].value = (e && e[k]) || ""));
+    // Lead is Joe, Kievon or Paul. An older value that isn't one of them stays as its own choice.
+    form.lead.querySelectorAll("option[data-extra]").forEach((o) => o.remove());
+    const lead = (e && e.lead) || "";
+    if (lead && ![...form.lead.options].some((o) => o.value === lead)) { const o = new Option(lead, lead); o.dataset.extra = "1"; form.lead.add(o); }
+    form.lead.value = lead;
     const keys = S.svcKeys(e && e.services);
     freeServices = e && e.services && !keys.length ? e.services : "";
     $("svcs").querySelectorAll("input").forEach((i) => (i.checked = keys.includes(i.value)));
-    setPick("staffing", e && e.staffing); setPick("threat_level", e && e.threat_level);
+    setPick("staffing", e && e.staffing); setPick("threat_level", e && e.threat_level ? String(e.threat_level) : "");
     $("byline").textContent = e && e.updated_by ? "Last changed by " + e.updated_by + " · " + new Date(e.updated_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
     ed.showModal();
   }

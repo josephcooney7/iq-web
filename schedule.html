@@ -77,6 +77,8 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
 .pick button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .pick button[aria-pressed="true"].u, .pick button[aria-pressed="true"].h { background: var(--bad); border-color: var(--bad); color: #fff; }
 .pick button[aria-pressed="true"].s, .pick button[aria-pressed="true"].l { background: var(--good); border-color: var(--good); color: #fff; }
+.pick.threat button { min-width: 44px; padding: 6px 0; }
+.pick.threat button[data-val=""] { padding: 6px 12px; }
 .pick button[aria-pressed="true"].m { background: var(--warn); border-color: var(--warn); color: #fff; }
 .byline { font-size: 13px; color: var(--ink-3); margin: 12px 0 0; }
 .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; margin-top: 12px; color: var(--ink-2); }
@@ -130,14 +132,14 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
       <div class="svcs" id="svcs"></div>
       <label class="f">Times<textarea name="times" maxlength="1000" rows="2"></textarea></label>
       <label class="f">Location<input type="text" name="location" maxlength="300"></label>
-      <label class="f">Lead<input type="text" name="lead" maxlength="120" placeholder="Not set yet"></label>
+      <label class="f">Lead<select name="lead"><option value="">Not set</option><option>Joe</option><option>Kievon</option><option>Paul</option></select></label>
       <span class="flbl" style="display:block;margin-top:12px">Staffing</span>
       <div class="pick" data-f="staffing">
         <button type="button" data-val="">Not set</button><button type="button" class="s" data-val="Staffed">Staffed</button><button type="button" class="u" data-val="Unstaffed">Unstaffed</button>
       </div>
-      <span class="flbl" style="display:block;margin-top:12px">Threat level</span>
-      <div class="pick" data-f="threat_level">
-        <button type="button" data-val="">Not set</button><button type="button" class="l" data-val="Low">Low</button><button type="button" class="m" data-val="Medium">Medium</button><button type="button" class="h" data-val="High">High</button>
+      <span class="flbl" style="display:block;margin-top:12px">Threat level (1 = low, 10 = high)</span>
+      <div class="pick threat" data-f="threat_level">
+        <button type="button" data-val="">Not set</button><button type="button" class="l" data-val="1">1</button><button type="button" class="l" data-val="2">2</button><button type="button" class="l" data-val="3">3</button><button type="button" class="m" data-val="4">4</button><button type="button" class="m" data-val="5">5</button><button type="button" class="m" data-val="6">6</button><button type="button" class="h" data-val="7">7</button><button type="button" class="h" data-val="8">8</button><button type="button" class="h" data-val="9">9</button><button type="button" class="h" data-val="10">10</button>
       </div>
       <label class="f">Notes<textarea name="notes" maxlength="2000" rows="2"></textarea></label>
       <p class="byline" id="byline"></p>
