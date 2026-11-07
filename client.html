@@ -203,7 +203,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   <!-- REPORT -->
   <section id="tabReport" hidden>
     <div class="panel report">
-      <div class="panel-head"><span class="label">Event summary</span><button type="button" class="btn noprint" id="printBtn">Print or save as PDF</button></div>
+      <div class="panel-head"><span class="label">Event summary</span><span class="noprint" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn noprint" id="waitBtn" hidden>Set security wait</button><button type="button" class="btn noprint" id="printBtn">Print or save as PDF</button></span></div>
       <h2 id="rTitle">&nbsp;</h2>
       <div class="facts" id="rFacts"></div>
       <div>
@@ -339,6 +339,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   /* ---------- render ---------- */
   function render() {
     if (!data) return;
+    $("waitBtn").hidden = !me.staff || asClient;
     renderApprovals();
     if (!data.event) {
       $("evName").textContent = "No approved events yet";
@@ -382,8 +383,9 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     $("tLastNote").textContent = "about " + Math.round(last15 / 15) + " people a minute";
     $("tPeak").textContent = peak && peak.n ? fmt(peak.n) : "–";
     $("tPeakNote").textContent = peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : " ";
-    $("tWait").textContent = waitNow == null ? "–" : waitNow + " min";
-    $("tWaitNote").textContent = waitNow == null ? "needs a line camera at this event" : longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : " ";
+    const manual = data.manual_wait || null; // wait typed by staff when there's no line camera, e.g. "Free flow"
+    $("tWait").textContent = waitNow == null ? (manual || "–") : waitNow + " min";
+    $("tWaitNote").textContent = waitNow == null ? (manual ? "checked on site" : "needs a line camera at this event") : longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : " ";
     // Checkpoints with no camera (e.g. Lanes 5-6 staffed but not counted) are listed, not counted as "not reporting".
     const noCam = cps.filter((c) => !c.has_unit);
     $("tCps").textContent = reporting.length + " of " + reporting.length;
@@ -432,7 +434,9 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       fact("Busiest 15 minutes", peak && peak.n ? fmt(peak.n) : "–", peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : ""),
       fact("Busiest checkpoint", busiest ? busiest.name : "–", busiest && total ? Math.round((busiest.total_in / total) * 100) + "% of arrivals" : ""),
       fact("Avg per checkpoint per hour", counted.length && hours ? fmt(Math.round(total / counted.length / hours)) : "–"),
-      fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera"),
+      avgWait == null && manual != null
+        ? fact("Security wait", manual, "checked on site")
+        : fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera"),
       fact("Incidents logged", String(updates.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", ")));
     barChart($("rChart"), arr, { label: (v) => fmt(v) + " people", short: (v) => fmt(v), empty: "No counts for this event." });
     $("rInc").replaceChildren(...(updates.length ? updates.map((u) => updateRow(u, false)) : [el("div", "empty", asClient ? "No incident reports shared with the client." : "No incident reports for this event.")]));
@@ -571,11 +575,21 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     } finally { btn.disabled = false; }
   });
 
+  // Staff can type the longest security wait when there's no line camera.
+  $("waitBtn").addEventListener("click", async () => {
+    if (!eventId) return;
+    const v = prompt("Security wait for this event, e.g. Free flow or 5 min (leave empty to clear):", (data && data.manual_wait) || "");
+    if (v === null) return;
+    try { await IQ.rpc("web_set_manual_wait", { p_event_id: eventId, p_text: v.trim().slice(0, 40) }); await load(); }
+    catch (e) { alert(IQ.explain(e)); }
+  });
+
   /* ---------- data ---------- */
   async function load(fresh) {
     try {
       data = await IQ.rpc("web_client_view", { p_event_id: eventId });
       eventId = (data.event && data.event.id) || null;
+      try { data.manual_wait = eventId ? await IQ.rpc("web_event_manual_wait", { p_event_id: eventId }) : null; } catch { data.manual_wait = null; }
       history.replaceState(null, "", eventId ? "?event=" + eventId : location.pathname);
       if (fresh) formFor = null;
       $("err").textContent = "";
