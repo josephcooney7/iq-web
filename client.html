@@ -101,6 +101,7 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .upd img { max-width: 240px; border-radius: 8px; border: 1px solid var(--line); }
 
 .report { max-width: 860px; }
+.rlogo { display: block; width: 100%; max-width: 520px; height: auto; margin: 6px auto 10px; background: #fff; border-radius: 8px; padding: 10px 14px; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
 .facts div { display: grid; gap: 4px; }
 .facts .num { font-size: 30px; }
@@ -204,6 +205,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   <section id="tabReport" hidden>
     <div class="panel report">
       <div class="panel-head"><span class="label">Event summary</span><span class="noprint" style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn noprint" id="waitBtn" hidden>Set security wait</button><button type="button" class="btn noprint" id="printBtn">Print or save as PDF</button></span></div>
+      <img class="rlogo" src="/icons/stapleton-report-logo.png" alt="Stapleton Security Services" width="1200" height="412">
       <h2 id="rTitle">&nbsp;</h2>
       <div class="facts" id="rFacts"></div>
       <div>
