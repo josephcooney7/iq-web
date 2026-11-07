@@ -120,7 +120,7 @@ window.SCHED = (() => {
       k9: evs.filter((e) => has(e, "K")).length,
       screening: evs.filter((e) => has(e, "S")).length,
       guards: evs.filter((e) => has(e, "P")).length,
-      notStaffed: evs.filter((e) => e.staffing !== "Staffed").length
+      notStaffed: evs.filter((e) => !(e.staffing === "Staffed" && e.lead)).length
     };
   }
 
@@ -154,7 +154,8 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   }
 
   /* ---------- drawing ---------- */
-  const cls = (e) => (e.staffing === "Staffed" ? "staffed" : e.staffing === "Unstaffed" ? "unstaffed" : "");
+  // Green once the event is Staffed AND has a lead; red until both are set.
+  const cls = (e) => (e.staffing === "Staffed" && e.lead ? "staffed" : "unstaffed");
   function card(e) {
     const b = document.createElement("button");
     b.type = "button"; b.className = "ev " + cls(e);
@@ -176,7 +177,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     const c = S.counts(evs);
     $("tiles").innerHTML = [
       ["Events" + label, c.events], ["Clients", c.clients], ["K9", c.k9], ["Screening", c.screening], ["Guard details", c.guards],
-      ["Not staffed yet", c.notStaffed, c.notStaffed ? "alert" : ""]
+      ["Need staff or lead", c.notStaffed, c.notStaffed ? "alert" : ""]
     ].map(([t, n, k]) => `<div class="tile2 ${k || ""}"><b>${n}</b><small>${t}</small></div>`).join("");
   }
 
