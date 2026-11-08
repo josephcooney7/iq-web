@@ -121,6 +121,8 @@ window.IQ = (() => {
     if (recovering || /type=recovery/.test(location.hash)) { await loginScreen("newpass"); recovering = false; }
     else if (!data.session) await loginScreen(location.hash === "#join" ? "signup" : "signin");
     let me;
+    // Events whose end time has passed switch to Finished (and planned ones go live at their start).
+    try { await rpc("web_close_ended_events"); } catch {}
     try { me = await rpc("web_me"); } catch (e) { me = { signed_in: true, staff: false, role: null, error: e }; }
     me.field = !!(me.staff || me.field);
     me.client = !me.staff && me.role === "client";
