@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>IQ Unit Setup</title>
+<title>IQ Units</title>
 <meta name="description" content="Set up a Stapleton IQ counting unit: camera photo and counting lines.">
 <meta name="theme-color" content="#0d5f7a">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -43,6 +43,14 @@ select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid 
 .status { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; color: var(--ink-2); margin-bottom: 12px; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--ink-3); vertical-align: 1px; }
 .dot.on { background: var(--good); } .dot.off { background: var(--bad); }
+.ulist { display: grid; gap: 8px; margin-top: 10px; }
+.ucard { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; color: var(--ink); font: inherit; cursor: pointer; }
+.ucard[aria-current="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ucard b { min-width: 56px; font-size: 17px; }
+.ucard > span:last-child { flex: 1; font-size: 14px; color: var(--ink-2); line-height: 1.35; }
+.ucard .dot { flex: none; margin: 0; }
+.ucard small { display: block; color: var(--ink-3); font-size: 12px; }
+.sech { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin: 0; }
 .frame { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; touch-action: none; user-select: none; -webkit-user-select: none; }
 .frame img[hidden] { display: none; }
 .empty[hidden] { display: none; }
@@ -73,8 +81,10 @@ button:disabled { opacity: .5; cursor: default; }
 </head>
 <body>
 <main>
-  <header>
-    <h1>Unit setup</h1>
+  <h1 style="margin:0 0 4px">IQ Units</h1>
+  <div class="ulist" id="ulist"></div>
+  <header style="margin-top:16px">
+    <h2 class="sech">Set up a unit</h2>
     <select id="unitSel" aria-label="Unit"><option>IQ-01</option></select>
   </header>
   <div class="status">
@@ -318,10 +328,29 @@ button:disabled { opacity: .5; cursor: default; }
   $("saveBtn").addEventListener("click", save);
   $("unitSel").addEventListener("change", (e) => {
     unit = e.target.value; dirty = false;
+    document.querySelectorAll(".ucard").forEach((c) => c.setAttribute("aria-current", String(c.querySelector("b").textContent === unit)));
     try { localStorage.setItem("iq-unit", unit); } catch {}
     history.replaceState(null, "", "/u/" + encodeURIComponent(unit));
     $("snap").hidden = true; $("empty").hidden = false; refresh();
   });
+
+  // All units at a glance: online dot + the event and checkpoint each one is counting for right now.
+  async function loadStatus() {
+    let list;
+    try { list = await IQ.rpc("web_units_status"); } catch { return; }
+    $("ulist").replaceChildren(...list.map((u) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "ucard";
+      b.setAttribute("aria-current", String(u.label === unit));
+      const where = u.event ? u.event + (u.checkpoint ? " · " + u.checkpoint : "") : "Not assigned to an event";
+      const seen = u.online ? "Online" : u.last_seen_at ? "Offline · seen " + ago(u.last_seen_at) : "Offline · never seen";
+      b.innerHTML = '<span class="dot ' + (u.online ? "on" : "off") + '"></span><b></b><span><span data-w></span><small data-s></small></span>';
+      b.querySelector("b").textContent = u.label;
+      b.querySelector("[data-w]").textContent = where;
+      b.querySelector("[data-s]").textContent = seen;
+      b.addEventListener("click", () => { if (u.label === unit) return; $("unitSel").value = u.label; $("unitSel").dispatchEvent(new Event("change")); });
+      return b;
+    }));
+  }
 
   async function loadUnits() {
     try {
@@ -340,6 +369,8 @@ button:disabled { opacity: .5; cursor: default; }
     ready = true;
     try { localStorage.setItem("iq-unit", unit); } catch {}
     await loadUnits();
+    loadStatus();
+    setInterval(() => { if (!document.hidden) loadStatus(); }, 30000);
     if (await refresh()) { if (!state.snapshot) say("Press “Take new photo” to see what the camera sees."); }
     setInterval(() => { if (!busy && !drag && !dirty && !document.hidden) refresh(); }, 15000);
   })();
