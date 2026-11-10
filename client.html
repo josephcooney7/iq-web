@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Stapleton IQ Client View</title>
+<title>Stapleton IQ Events</title>
 <meta name="description" content="What a client sees for their event: live counts, security wait times, the next-morning report and incident reports.">
 <meta name="theme-color" content="#0d5f7a">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -155,14 +155,14 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="mark">Stapleton IQ · Client view</div>
+      <div class="mark">Stapleton IQ · Events</div>
       <h1 id="evName">Loading…</h1>
       <p class="sub" id="evSub">&nbsp;</p>
     </div>
     <div class="controls">
       <label class="label" for="evSel">Event</label>
       <select id="evSel" aria-label="Event"></select>
-      <label class="asclient"><input type="checkbox" id="asClient"> View as client</label>
+      <label class="asclient"><input type="checkbox" id="asClient"> Preview as client</label>
     </div>
   </div>
 
@@ -243,7 +243,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       <div class="evlist" id="evList"></div>
     </div>
     <div class="panel" id="approvePanel" hidden style="margin-top:20px">
-      <div class="panel-head"><h2>Waiting for your approval</h2><span>Only events you approve show in Client view</span></div>
+      <div class="panel-head"><h2>Waiting for your approval</h2><span>Clients only see events you approve</span></div>
       <div class="evlist" id="pendList"></div>
     </div>
   </section>
@@ -362,9 +362,9 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     renderApprovals();
     if (!data.event) {
       $("evName").textContent = "No approved events yet";
-      $("evSub").textContent = data.can_approve ? "Approve an event under All events to show it here." : isClient ? "Your event will show here once your Stapleton team turns it on." : "Ask Joe to approve an event for Client view.";
+      $("evSub").textContent = data.can_approve ? "Approve an event under All events to show it here." : isClient ? "Your event will show here once your Stapleton team turns it on." : "Ask Joe to approve an event for clients.";
       $("evSel").replaceChildren();
-      $("evList").replaceChildren(el("div", "empty", isClient ? "No events to show yet." : "No events are approved for Client view yet."));
+      $("evList").replaceChildren(el("div", "empty", isClient ? "No events to show yet." : "No events are approved for clients yet."));
       return;
     }
     const ev = data.event || {}, cps = data.checkpoints || [], buckets = data.buckets || [], waits = data.wait_buckets || [];
@@ -485,16 +485,16 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     const rows = pend.map((e) => {
       const r = el("div"); r.style.cssText = "display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)";
       const l = el("div"); l.append(el("b", null, e.name), el("small", null, [e.client, day(e.starts_at), e.status].filter(Boolean).join(" · ")));
-      const b = el("button", "btn primary", "Approve for Client view"); b.type = "button";
+      const b = el("button", "btn primary", "Approve for client"); b.type = "button";
       b.addEventListener("click", () => approve(e.id, true, b));
       r.append(l, b); return r;
     });
-    $("pendList").replaceChildren(...(rows.length ? rows : [el("div", "empty", "Nothing waiting. New events stay off Client view until you approve them here.")]));
+    $("pendList").replaceChildren(...(rows.length ? rows : [el("div", "empty", "Nothing waiting. Clients don't see new events until you approve them here.")]));
     if (data.event) {
       const r = el("div"); r.style.cssText = "display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:14px 0";
       r.append(el("small", null, "Showing now: " + data.event.name));
-      const b = el("button", "btn", "Remove this event from Client view"); b.type = "button";
-      b.addEventListener("click", () => { if (confirm("Take " + data.event.name + " off Client view? You can approve it again later.")) approve(data.event.id, false, b); });
+      const b = el("button", "btn", "Hide this event from the client"); b.type = "button";
+      b.addEventListener("click", () => { if (confirm("Hide " + data.event.name + " from the client? You can approve it again later.")) approve(data.event.id, false, b); });
       r.append(b); $("pendList").append(r);
     }
   }
@@ -574,7 +574,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     e.preventDefault();
     const msg = $("incMsg"), btn = form.querySelector("button[type=submit]");
     const where = form.where.value || "";
-    if (!data || !data.event) { msg.className = "msg bad"; msg.textContent = "Approve an event for Client view first."; return; }
+    if (!data || !data.event) { msg.className = "msg bad"; msg.textContent = "Approve this event for the client first."; return; }
     if (!form.note.value.trim()) { msg.className = "msg bad"; msg.textContent = "Say what happened before saving."; form.note.focus(); return; }
     btn.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
     try {
@@ -614,7 +614,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       if (fresh) formFor = null;
       $("err").textContent = "";
       render();
-    } catch (e) { $("err").textContent = IQ.explain(e); if (!data) $("evName").textContent = "Client view"; }
+    } catch (e) { $("err").textContent = IQ.explain(e); if (!data) $("evName").textContent = "IQ Events"; }
   }
   const schedule = () => { clearTimeout(timer); timer = setTimeout(async () => { if (!document.hidden && tab !== "Incidents") await load(); schedule(); }, 30000); };
   document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });

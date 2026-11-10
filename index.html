@@ -40,12 +40,11 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 
   <a class="tile" href="/gear" id="fieldTile" hidden><b>Equipment</b><span>Sign OpenGates out and back in, and see what's still out. You can also just scan a gate's QR sticker.</span></a>
   <a class="tile" href="/client" id="clientTile" hidden><b>Your event</b><span>Live counts, security wait times, the next-morning report and updates from your Stapleton team.</span></a>
-  <a class="tile" href="/dashboard" id="dashTile" hidden><b>Live dashboard</b><span>People through each checkpoint, updated every 20 seconds.</span></a>
 
   <div id="staff" hidden>
     <a class="tile" href="/schedule" style="margin-bottom:16px"><b>Schedule</b><span>Every event in one place: dates, client, services, lead, staffing and threat level. Import new events from a spreadsheet.</span></a>
-    <a class="tile" href="/client" style="margin-bottom:16px"><b>Client view</b><span>The page a client sees for their event: live counts, security wait times, the next-morning report and incident reports.</span></a>
-    <a class="tile" href="/setup"><b>Unit setup</b><span>Take a photo from a unit's camera and set its counting lines.</span></a>
+    <a class="tile" href="/client" style="margin-bottom:16px"><b>IQ Events</b><span>Live counts, security wait times, the next-morning report and incidents for each event. Tick "Preview as client" to see exactly what the client sees.</span></a>
+    <a class="tile" href="/setup"><b>IQ Units</b><span>Which units are online and what event they're on. Take a photo from a unit's camera and set its counting lines.</span></a>
     <a class="tile" href="/gear" style="margin-top:16px"><b>Equipment</b><span>Where every OpenGate is, what's still out from an event, and each unit's history. Scan a unit's QR sticker to sign it out or return it.</span></a>
     <h2>Units</h2>
     <div class="units" id="units"></div>
@@ -78,7 +77,6 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
   let me;
   try { me = await IQ.requireLogin({ bar }); } catch { return; }
   $("who").textContent = "Signed in as " + (me.email || "") + (me.role ? " · " + IQ.roleName(me.role) : "");
-  $("dashTile").hidden = !me.dash;
   $("clientTile").hidden = !me.client;
   $("fieldTile").hidden = !me.field || me.staff;
   if (me.staff) {
