@@ -86,7 +86,7 @@ body { background: #0e161d; color: #e9eef2; }
 <script>
 (async () => {
   const $ = (id) => document.getElementById(id);
-  const bar = IQ.topbar("client");
+  const bar = IQ.topbar("gate");
   try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
 
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
