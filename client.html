@@ -187,6 +187,28 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       <div class="tile"><span class="label">Checkpoints reporting</span><span class="num" id="tCps">–</span><span class="note" id="tCpsNote">&nbsp;</span></div>
     </div>
 
+    <!-- OpenGate metal detectors (office staff only; from NetID Anywhere report exports) -->
+    <div class="panel" id="gatePanel" data-staffonly hidden>
+      <div class="panel-head"><h2>OpenGate metal detectors</h2><span>Staff only · from NetID reports</span></div>
+      <div class="tiles">
+        <div class="tile"><span class="label">Gate passes</span><span class="num" id="gPass">–</span><span class="note" id="gPassNote">&nbsp;</span></div>
+        <div class="tile"><span class="label">Alarms</span><span class="num" id="gAlarm" style="color:var(--bad)">–</span><span class="note" id="gAlarmNote">&nbsp;</span></div>
+        <div class="tile"><span class="label">Alarm rate</span><span class="num" id="gRate">–</span><span class="note">alarms ÷ gate passes</span></div>
+        <div class="tile"><span class="label">Camera vs gate</span><span class="num" id="gDiff">–</span><span class="note" id="gDiffNote">&nbsp;</span></div>
+      </div>
+      <div class="tablebox"><table>
+        <thead><tr><th>Checkpoint</th><th class="r">Gate passes</th><th class="r">Alarms</th><th class="r">Alarm rate</th><th class="r">Camera count</th><th>Report covers</th><th></th></tr></thead>
+        <tbody id="gateRows"></tbody>
+      </table></div>
+      <form id="gateForm" class="grid2" novalidate>
+        <label class="f">Checkpoint<select name="cp"></select></label>
+        <label class="f">NetID report (CSV)<input type="file" name="file" accept=".csv,text/csv"></label>
+        <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap"><button type="submit" class="btn primary">Upload gate report</button></div>
+      </form>
+      <p class="note" style="margin:0;font-size:13px;color:var(--ink-2)">In NetID: Reports, Transit Alarms, pick the gate(s) at this checkpoint and the event day, CSV. Times in the file are read as this device's local time. Uploading the same report again replaces it.</p>
+      <p class="msg" id="gateMsg" role="status"></p>
+    </div>
+
     <div class="panel">
       <div class="panel-head"><h2>Arrivals every 15 minutes</h2><span>Darkest bar = busiest period</span></div>
       <div id="arrChart"></div>
@@ -435,6 +457,8 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     }));
     if (!cps.length) { const tr = el("tr"), td = el("td", null, "No checkpoints set up for this event."); td.colSpan = 5; tr.append(td); $("cpRows").replaceChildren(tr); }
 
+    renderGate(cps);
+
     // updates (client-facing list)
     const shown = (data.updates || []).filter((u) => u.visible_to_client);
     $("updList").replaceChildren(...(shown.length ? shown.map((u) => updateRow(u, false)) : [el("div", "empty", "No updates shared yet.")]));
@@ -604,12 +628,113 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     catch (e) { alert(IQ.explain(e)); }
   });
 
+  /* ---------- OpenGate (CEIA NetID report upload) ---------- */
+  const pct = (a, b) => (b ? (Math.round((a / b) * 1000) / 10) + "%" : "–");
+  let gateFormFor = null;
+  function renderGate(cps) {
+    const panel = $("gatePanel");
+    panel.hidden = !me.staff || isClient || asClient || !data.event;
+    if (panel.hidden) return;
+    const g = data.gate || { checkpoints: [] }, gcs = g.checkpoints || [];
+    const pass = gcs.reduce((a, c) => a + Number(c.transits || 0), 0);
+    const alarms = gcs.reduce((a, c) => a + Number(c.alarms || 0), 0);
+    const camAtGates = cps.filter((c) => gcs.some((x) => x.checkpoint_id === c.id)).reduce((a, c) => a + Number(c.total_in || 0), 0);
+    $("gPass").textContent = gcs.length ? fmt(pass) : "–";
+    $("gPassNote").textContent = gcs.length ? gcs.length + " checkpoint" + (gcs.length > 1 ? "s" : "") + " reported" : "upload a NetID report below";
+    $("gAlarm").textContent = gcs.length ? fmt(alarms) : "–";
+    $("gAlarmNote").textContent = gcs.length && pass ? "about 1 in " + Math.max(1, Math.round(pass / Math.max(1, alarms))) + " people" : " ";
+    $("gRate").textContent = gcs.length ? pct(alarms, pass) : "–";
+    const diff = camAtGates - pass;
+    $("gDiff").textContent = gcs.length ? (diff > 0 ? "+" : "") + fmt(diff) : "–";
+    $("gDiffNote").textContent = gcs.length ? fmt(camAtGates) + " counted by camera at the same checkpoints" : " ";
+    $("gateRows").replaceChildren(...(gcs.length ? gcs.map((c) => {
+      const tr = el("tr"), cam = cps.find((x) => x.id === c.checkpoint_id);
+      const rm = el("button", "btn", "Remove"); rm.type = "button"; rm.style.minHeight = "36px";
+      rm.addEventListener("click", async () => {
+        if (!confirm("Remove the gate numbers for " + c.name + "?")) return;
+        try { await IQ.rpc("web_gate_clear", { p_event_id: data.event.id, p_checkpoint_id: c.checkpoint_id }); await load(); }
+        catch (e) { $("gateMsg").className = "msg bad"; $("gateMsg").textContent = IQ.explain(e); }
+      });
+      const td = el("td"); td.append(rm);
+      tr.append(el("td", null, c.name), el("td", "r", fmt(c.transits)), el("td", "r", fmt(c.alarms)), el("td", "r", pct(c.alarms, c.transits)),
+        el("td", "r", cam && cam.has_unit ? fmt(cam.total_in) : "–"), el("td", null, c.first ? time(c.first) + " to " + time(new Date(c.last).getTime() + 3600000) : "–"), td);
+      return tr;
+    }) : [(() => { const tr = el("tr"), td = el("td", null, "No gate reports uploaded for this event yet."); td.colSpan = 7; td.style.color = "var(--ink-3)"; tr.append(td); return tr; })()]));
+    if (gateFormFor !== data.event.id) {
+      gateFormFor = data.event.id;
+      $("gateForm").cp.replaceChildren(...cps.map((c) => { const o = el("option", null, c.name); o.value = c.id; return o; }));
+    }
+  }
+
+  // NetID Anywhere "Transit Alarms" CSV: a few header lines, then for each location a
+  // "Field Name,Transits In,Transits Out,Metal Out,Metal In" line and one row per interval
+  // ("2026-11-11, 09:00:00",10,0,0,2). Several locations in one file are added together.
+  function parseCsvLine(line) {
+    const out = []; let cur = "", q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; }
+      else if (ch === '"') q = true; else if (ch === ",") { out.push(cur); cur = ""; } else cur += ch;
+    }
+    out.push(cur); return out.map((s) => s.trim());
+  }
+  function parseGateCsv(text) {
+    const lines = text.replace(/^﻿/, "").split(/\r?\n/);
+    const byTime = new Map(); let cols = null, interval = "";
+    const keyFor = (h) => {
+      h = h.toLowerCase().replace(/\s+/g, " ");
+      if (/transit/.test(h) && /\bin\b|inbound/.test(h)) return "transits_in";
+      if (/transit/.test(h) && /\bout\b|outbound/.test(h)) return "transits_out";
+      if (/(metal|alarm)/.test(h) && /\bin\b|inbound/.test(h)) return "alarms_in";
+      if (/(metal|alarm)/.test(h) && /\bout\b|outbound/.test(h)) return "alarms_out";
+      return null;
+    };
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const c = parseCsvLine(line);
+      if (/^interval$/i.test(c[0])) interval = c[1] || "";
+      if (/^field name$/i.test(c[0])) { cols = c.map(keyFor); continue; }
+      const m = /^(\d{4})-(\d{2})-(\d{2}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(c[0]);
+      if (!m || !cols) continue;
+      const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).toISOString();
+      const row = byTime.get(t) || { t };
+      cols.forEach((k, i) => { if (k && c[i] !== "" && !isNaN(+c[i])) row[k] = (row[k] || 0) + Number(c[i]); });
+      byTime.set(t, row);
+    }
+    const fail = (t) => Object.assign(new Error(t), { gateCsv: true });
+    if (!cols) throw fail("This doesn't look like a NetID transit report. Export Transit Alarms as CSV and try again.");
+    const rows = [...byTime.values()].sort((a, b) => (a.t < b.t ? -1 : 1));
+    if (!rows.length) throw fail("No time rows found in that file.");
+    return { rows, interval };
+  }
+  $("gateForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target, msg = $("gateMsg"), btn = f.querySelector("button[type=submit]");
+    const file = f.file.files[0];
+    if (!file) { msg.className = "msg bad"; msg.textContent = "Choose the CSV file you exported from NetID."; return; }
+    if (!f.cp.value) { msg.className = "msg bad"; msg.textContent = "This event has no checkpoints yet."; return; }
+    btn.disabled = true; msg.className = "msg"; msg.textContent = "Reading the report…";
+    try {
+      const { rows, interval } = parseGateCsv(await file.text());
+      const tot = rows.reduce((a, r) => a + (r.transits_in || 0), 0), al = rows.reduce((a, r) => a + (r.alarms_in || 0), 0);
+      await IQ.rpc("web_gate_import", { p_event_id: data.event.id, p_checkpoint_id: f.cp.value, p_rows: rows,
+        p_source: { file: file.name.slice(0, 120), interval, uploaded_at: new Date().toISOString(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+      f.reset(); gateFormFor = null;
+      msg.className = "msg good"; msg.textContent = "Uploaded: " + fmt(tot) + " gate passes and " + fmt(al) + " alarms.";
+      await load();
+    } catch (err) {
+      msg.className = "msg bad";
+      msg.textContent = err.gateCsv ? err.message : /bad_checkpoint/.test(err.message) ? "That checkpoint isn't part of this event." : IQ.explain(err);
+    } finally { btn.disabled = false; }
+  });
+
   /* ---------- data ---------- */
   async function load(fresh) {
     try {
       data = await IQ.rpc("web_client_view", { p_event_id: eventId });
       eventId = (data.event && data.event.id) || null;
       try { data.manual_wait = eventId ? await IQ.rpc("web_event_manual_wait", { p_event_id: eventId }) : null; } catch { data.manual_wait = null; }
+      try { data.gate = eventId && me.staff && !isClient ? await IQ.rpc("web_gate_readings", { p_event_id: eventId }) : null; } catch { data.gate = null; }
       history.replaceState(null, "", eventId ? "?event=" + eventId : location.pathname);
       if (fresh) formFor = null;
       $("err").textContent = "";
