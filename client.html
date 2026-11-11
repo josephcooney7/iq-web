@@ -189,7 +189,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
 
     <!-- OpenGate metal detectors (office staff only; from NetID Anywhere report exports) -->
     <div class="panel" id="gatePanel" data-staffonly hidden>
-      <div class="panel-head"><h2>OpenGate metal detectors</h2><span>Staff only · from NetID reports</span></div>
+      <div class="panel-head"><h2>OpenGate metal detectors</h2><span>Staff only · from NetID reports · <a id="gateScreenLink" href="/gate">Open gate screen</a></span></div>
       <div class="tiles">
         <div class="tile"><span class="label">Gate passes</span><span class="num" id="gPass">–</span><span class="note" id="gPassNote">&nbsp;</span></div>
         <div class="tile"><span class="label">Alarms</span><span class="num" id="gAlarm" style="color:var(--bad)">–</span><span class="note" id="gAlarmNote">&nbsp;</span></div>
@@ -769,6 +769,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       try { data.manual_wait = eventId ? await IQ.rpc("web_event_manual_wait", { p_event_id: eventId }) : null; } catch { data.manual_wait = null; }
       try { data.gate = eventId ? await IQ.rpc("web_gate_readings", { p_event_id: eventId }) : null; } catch { data.gate = null; }
       history.replaceState(null, "", eventId ? "?event=" + eventId : location.pathname);
+      $("gateScreenLink").href = "/gate" + (eventId ? "?event=" + eventId : "");
       if (fresh) formFor = null;
       $("err").textContent = "";
       render();
