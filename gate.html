@@ -88,7 +88,7 @@ body { background: #0e161d; color: #e9eef2; }
     <div><small>Alarm rate (NetID report)</small><b id="tRate">–</b></div>
     <div><small>Clear passes seen</small><b id="tPass">–</b></div>
   </div>
-  <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, checked every 2 seconds. An alarm shows red for 8 seconds, then the screen goes back to CLEAR so the line keeps moving. Alarmed people wait in the strip until someone taps Cleared. Tap the screen once to turn on the alarm beep. <button type="button" class="linkbtn" id="testBtn">Show a test alarm</button></p>
+  <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, sent to this screen the moment they happen. An alarm shows red for 8 seconds, then the screen goes back to CLEAR so the line keeps moving. Alarmed people wait in the strip until someone taps Cleared. Tap the screen once to turn on the alarm beep. <button type="button" class="linkbtn" id="testBtn">Show a test alarm</button></p>
 </div>
 
 <script src="/js/supabase.js"></script>
@@ -225,7 +225,19 @@ body { background: #0e161d; color: #e9eef2; }
   document.addEventListener("click", keepAwake, { once: true });
   keepAwake();
   await load();
-  setInterval(() => { if (!document.hidden) load(); }, 2000);
+  // Live push: the moment IQ's camera reports an alarm or pass, fetch it (the 3 s check below is only a backup).
+  let chan = null, chanFor = null, busy = false, again = false;
+  async function loadNow() { if (busy) { again = true; return; } busy = true; try { await load(); } finally { busy = false; if (again) { again = false; loadNow(); } } }
+  function subscribe() {
+    if (!eventId || chanFor === eventId) return;
+    if (chan) IQ.sb.removeChannel(chan);
+    chanFor = eventId;
+    chan = IQ.sb.channel("gate-" + eventId)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "gate_events", filter: "event_id=eq." + eventId }, () => loadNow())
+      .subscribe();
+  }
+  subscribe();
+  setInterval(() => { subscribe(); if (!document.hidden) loadNow(); }, 3000);
 })();
 </script>
 </body>
