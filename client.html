@@ -205,6 +205,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         <label class="f">NetID report (CSV)<input type="file" name="file" accept=".csv,text/csv"></label>
         <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap"><button type="submit" class="btn primary">Upload gate report</button></div>
       </form>
+      <label class="asclient" style="justify-self:start"><input type="checkbox" id="gateShow"> Show gate numbers on the client report</label>
       <p class="note" style="margin:0;font-size:13px;color:var(--ink-2)">In NetID: Reports, Transit Alarms, pick the gate(s) at this checkpoint and the event day, CSV. Times in the file are read as this device's local time. Uploading the same report again replaces it.</p>
       <p class="msg" id="gateMsg" role="status"></p>
     </div>
@@ -250,6 +251,16 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       <div>
         <h3 style="font-size:18px;margin-bottom:6px">Arrivals through the event</h3>
         <div id="rChart"></div>
+      </div>
+      <div id="rGateWrap" hidden>
+        <h3 style="font-size:18px;margin-bottom:6px">Metal detector screening</h3>
+        <div class="facts" id="rGateFacts"></div>
+        <div class="tablebox"><table>
+          <thead><tr><th>Checkpoint</th><th class="r">Walk-through passes</th><th class="r">Alarms</th><th class="r">Alarm rate</th></tr></thead>
+          <tbody id="rGateRows"></tbody>
+        </table></div>
+        <h3 style="font-size:16px;margin:12px 0 6px">Alarms through the event</h3>
+        <div id="rGateChart"></div>
       </div>
       <div id="rIncWrap">
         <h3 style="font-size:18px;margin-bottom:6px">Incidents</h3>
@@ -483,6 +494,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         : fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera"),
       fact("Incidents logged", String(updates.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", ")));
     barChart($("rChart"), arr, { label: (v) => fmt(v) + " people", short: (v) => fmt(v), empty: "No counts for this event." });
+    renderGateReport();
     $("rInc").replaceChildren(...(updates.length ? updates.map((u) => updateRow(u, false)) : [el("div", "empty", asClient ? "No incident reports shared with the client." : "No incident reports for this event.")]));
 
     // all events
@@ -653,11 +665,39 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         el("td", "r", cam && cam.has_unit ? fmt(cam.total_in) : "–"), el("td", null, c.first ? time(c.first) + " to " + time(new Date(c.last).getTime() + 3600000) : "–"));
       return tr;
     }) : [(() => { const tr = el("tr"), td = el("td", null, "No gate reports uploaded for this event yet."); td.colSpan = 6; td.style.color = "var(--ink-3)"; tr.append(td); return tr; })()]));
+    $("gateShow").checked = !!g.show_gate;
     if (gateFormFor !== data.event.id) {
       gateFormFor = data.event.id;
       $("gateForm").cp.replaceChildren(...cps.map((c) => { const o = el("option", null, c.name); o.value = c.id; return o; }));
     }
   }
+
+  // Report section: only when staff ticked "Show gate numbers on the client report" for this event.
+  function renderGateReport() {
+    const g = data.gate, gcs = (g && g.checkpoints) || [];
+    $("rGateWrap").hidden = !(g && g.show_gate && gcs.length);
+    if ($("rGateWrap").hidden) return;
+    const pass = gcs.reduce((a, c) => a + Number(c.transits || 0), 0), alarms = gcs.reduce((a, c) => a + Number(c.alarms || 0), 0);
+    const fact = (label, value, note) => { const d = el("div"); d.append(el("span", "label", label), el("span", "num", value)); if (note) d.append(el("small", null, note)); return d; };
+    const peak = (g.series || []).reduce((p, x) => (Number(x.alarms || 0) > (p ? Number(p.alarms || 0) : 0) ? x : p), null);
+    $("rGateFacts").replaceChildren(
+      fact("Walk-through passes", fmt(pass), "counted by the metal detectors"),
+      fact("Alarms", fmt(alarms), pass && alarms ? "about 1 in " + Math.max(1, Math.round(pass / alarms)) + " guests" : ""),
+      fact("Alarm rate", pct(alarms, pass)),
+      fact("Most alarms", peak ? fmt(peak.alarms) : "–", peak ? "starting " + time(peak.t) : ""));
+    $("rGateRows").replaceChildren(...gcs.map((c) => { const tr = el("tr");
+      tr.append(el("td", null, c.name), el("td", "r", fmt(c.transits)), el("td", "r", fmt(c.alarms)), el("td", "r", pct(c.alarms, c.transits))); return tr; }));
+    const ser = (g.series || []).filter((x) => Number(x.transits || 0) > 0 || Number(x.alarms || 0) > 0);
+    const first = ser.length ? ser[0].t : null, last = ser.length ? ser[ser.length - 1].t : null;
+    const shown = (g.series || []).filter((x) => first && x.t >= first && x.t <= last);
+    barChart($("rGateChart"), shown.map((x) => ({ t: x.t, v: Number(x.alarms || 0) })),
+      { label: (v) => fmt(v) + " alarms", short: (v) => fmt(v), h: 100, color: () => "var(--bad)", empty: "No alarms recorded." });
+  }
+  $("gateShow").addEventListener("change", async (e) => {
+    const on = e.target.checked;
+    try { await IQ.rpc("web_set_show_gate", { p_event_id: data.event.id, p_on: on }); await load(); }
+    catch (err) { e.target.checked = !on; $("gateMsg").className = "msg bad"; $("gateMsg").textContent = IQ.explain(err); }
+  });
 
   // NetID Anywhere "Transit Alarms" CSV: a few header lines, then for each location a
   // "Field Name,Transits In,Transits Out,Metal Out,Metal In" line and one row per interval
@@ -727,7 +767,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       data = await IQ.rpc("web_client_view", { p_event_id: eventId });
       eventId = (data.event && data.event.id) || null;
       try { data.manual_wait = eventId ? await IQ.rpc("web_event_manual_wait", { p_event_id: eventId }) : null; } catch { data.manual_wait = null; }
-      try { data.gate = eventId && me.staff && !isClient ? await IQ.rpc("web_gate_readings", { p_event_id: eventId }) : null; } catch { data.gate = null; }
+      try { data.gate = eventId ? await IQ.rpc("web_gate_readings", { p_event_id: eventId }) : null; } catch { data.gate = null; }
       history.replaceState(null, "", eventId ? "?event=" + eventId : location.pathname);
       if (fresh) formFor = null;
       $("err").textContent = "";
