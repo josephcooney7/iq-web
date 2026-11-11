@@ -194,6 +194,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         <div class="tile"><span class="label">Gate passes</span><span class="num" id="gPass">–</span><span class="note" id="gPassNote">&nbsp;</span></div>
         <div class="tile"><span class="label">Alarms</span><span class="num" id="gAlarm" style="color:var(--bad)">–</span><span class="note" id="gAlarmNote">&nbsp;</span></div>
         <div class="tile"><span class="label">Alarm rate</span><span class="num" id="gRate">–</span><span class="note">alarms ÷ gate passes</span></div>
+        <div class="tile"><span class="label">Live alarms (IQ camera)</span><span class="num" id="gLive" style="color:var(--bad)">–</span><span class="note" id="gLiveNote">&nbsp;</span></div>
         <div class="tile"><span class="label">Camera vs gate</span><span class="num" id="gDiff">–</span><span class="note" id="gDiffNote">&nbsp;</span></div>
       </div>
       <div class="tablebox"><table>
@@ -665,6 +666,10 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         el("td", "r", cam && cam.has_unit ? fmt(cam.total_in) : "–"), el("td", null, c.first ? time(c.first) + " to " + time(new Date(c.last).getTime() + 3600000) : "–"));
       return tr;
     }) : [(() => { const tr = el("tr"), td = el("td", null, "No gate reports uploaded for this event yet."); td.colSpan = 6; td.style.color = "var(--ink-3)"; tr.append(td); return tr; })()]));
+    const live = data.gateLive || {}, lt = live.today || {}, cams = live.cameras || [];
+    $("gLive").textContent = cams.length || lt.alarms ? fmt(lt.alarms) : "–";
+    $("gLiveNote").textContent = lt.last_alarm ? "last at " + time(lt.last_alarm) + (lt.alarms_15m ? " · " + lt.alarms_15m + " in last 15 min" : "")
+      : cams.length ? (cams[0].device || "IQ camera") + " watching " + cams[0].checkpoint : "no IQ camera on a gate";
     $("gateShow").checked = !!g.show_gate;
     if (gateFormFor !== data.event.id) {
       gateFormFor = data.event.id;
@@ -768,6 +773,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       eventId = (data.event && data.event.id) || null;
       try { data.manual_wait = eventId ? await IQ.rpc("web_event_manual_wait", { p_event_id: eventId }) : null; } catch { data.manual_wait = null; }
       try { data.gate = eventId ? await IQ.rpc("web_gate_readings", { p_event_id: eventId }) : null; } catch { data.gate = null; }
+      try { data.gateLive = eventId && me.staff ? await IQ.rpc("web_gate_events", { p_event_id: eventId, p_after_id: 2147483647 }) : null; } catch { data.gateLive = null; }
       history.replaceState(null, "", eventId ? "?event=" + eventId : location.pathname);
       $("gateScreenLink").href = "/gate" + (eventId ? "?event=" + eventId : "");
       if (fresh) formFor = null;

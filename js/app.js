@@ -34,6 +34,7 @@ window.IQ = (() => {
         <a href="/setup" data-staff hidden ${active === "setup" ? 'aria-current="page"' : ""}>IQ Units</a>
         <a href="/gear" data-field hidden ${active === "gear" ? 'aria-current="page"' : ""}>Equipment</a>
         <a href="/schedule" data-staff hidden ${active === "schedule" ? 'aria-current="page"' : ""}>Schedule</a>
+        <a href="/gate" data-staff hidden ${active === "gate" ? 'aria-current="page"' : ""}>Gate Screen</a>
       </span>
       <button type="button" class="iq-out" hidden>Sign out</button>`;
     document.body.prepend(bar);
