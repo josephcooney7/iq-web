@@ -77,7 +77,7 @@ body { background: #0e161d; color: #e9eef2; }
     <div><small>Alarm rate (NetID report)</small><b id="tRate">–</b></div>
     <div><small>Clear passes seen</small><b id="tPass">–</b></div>
   </div>
-  <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, checked every 2 seconds. The screen stays red until someone taps "Person cleared". <button type="button" class="linkbtn" id="testBtn">Show a test alarm</button></p>
+  <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, checked every 2 seconds. The screen stays red until someone taps "Person cleared". Tap the screen once to turn on the alarm beep. <button type="button" class="linkbtn" id="testBtn">Show a test alarm</button></p>
 </div>
 
 <script src="/js/supabase.js"></script>
@@ -106,12 +106,21 @@ body { background: #0e161d; color: #e9eef2; }
       } catch { return; }
     }
   }
+  // Beep on alarm (browsers allow sound only after the first tap on the page).
+  let ac = null;
+  document.addEventListener("click", () => { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch {} });
+  function beep() {
+    if (!ac) return;
+    try { [0, 0.35, 0.7].forEach((t) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(0.25, ac.currentTime + t); g.gain.setValueAtTime(0, ac.currentTime + t + 0.25); o.start(ac.currentTime + t); o.stop(ac.currentTime + t + 0.26); }); } catch {}
+  }
   function showAlarm(text, id) {
     pending += 1;
     if (id) fetchPhoto(id);
     $("alarmSub").textContent = text + (pending > 1 ? " · " + pending + " alarms waiting" : "");
     $("calm").hidden = true; $("alarm").hidden = false;
     try { navigator.vibrate && navigator.vibrate([400, 200, 400]); } catch {}
+    beep();
   }
   function showPass() {
     if (!$("alarm").hidden) return;
