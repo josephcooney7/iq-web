@@ -197,7 +197,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         <div class="tile"><span class="label">Camera vs gate</span><span class="num" id="gDiff">–</span><span class="note" id="gDiffNote">&nbsp;</span></div>
       </div>
       <div class="tablebox"><table>
-        <thead><tr><th>Checkpoint</th><th class="r">Gate passes</th><th class="r">Alarms</th><th class="r">Alarm rate</th><th class="r">Camera count</th><th>Report covers</th><th></th></tr></thead>
+        <thead><tr><th>Checkpoint</th><th class="r">Gate passes</th><th class="r">Alarms</th><th class="r">Alarm rate</th><th class="r">Camera count</th><th>Report covers</th></tr></thead>
         <tbody id="gateRows"></tbody>
       </table></div>
       <form id="gateForm" class="grid2" novalidate>
@@ -649,17 +649,10 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     $("gDiffNote").textContent = gcs.length ? fmt(camAtGates) + " counted by camera at the same checkpoints" : " ";
     $("gateRows").replaceChildren(...(gcs.length ? gcs.map((c) => {
       const tr = el("tr"), cam = cps.find((x) => x.id === c.checkpoint_id);
-      const rm = el("button", "btn", "Remove"); rm.type = "button"; rm.style.minHeight = "36px";
-      rm.addEventListener("click", async () => {
-        if (!confirm("Remove the gate numbers for " + c.name + "?")) return;
-        try { await IQ.rpc("web_gate_clear", { p_event_id: data.event.id, p_checkpoint_id: c.checkpoint_id }); await load(); }
-        catch (e) { $("gateMsg").className = "msg bad"; $("gateMsg").textContent = IQ.explain(e); }
-      });
-      const td = el("td"); td.append(rm);
       tr.append(el("td", null, c.name), el("td", "r", fmt(c.transits)), el("td", "r", fmt(c.alarms)), el("td", "r", pct(c.alarms, c.transits)),
-        el("td", "r", cam && cam.has_unit ? fmt(cam.total_in) : "–"), el("td", null, c.first ? time(c.first) + " to " + time(new Date(c.last).getTime() + 3600000) : "–"), td);
+        el("td", "r", cam && cam.has_unit ? fmt(cam.total_in) : "–"), el("td", null, c.first ? time(c.first) + " to " + time(new Date(c.last).getTime() + 3600000) : "–"));
       return tr;
-    }) : [(() => { const tr = el("tr"), td = el("td", null, "No gate reports uploaded for this event yet."); td.colSpan = 7; td.style.color = "var(--ink-3)"; tr.append(td); return tr; })()]));
+    }) : [(() => { const tr = el("tr"), td = el("td", null, "No gate reports uploaded for this event yet."); td.colSpan = 6; td.style.color = "var(--ink-3)"; tr.append(td); return tr; })()]));
     if (gateFormFor !== data.event.id) {
       gateFormFor = data.event.id;
       $("gateForm").cp.replaceChildren(...cps.map((c) => { const o = el("option", null, c.name); o.value = c.id; return o; }));

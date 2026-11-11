@@ -38,18 +38,6 @@ begin
   return n;
 end $$;
 
--- Remove a checkpoint's gate numbers for an event (e.g. wrong file uploaded).
-create or replace function public.web_gate_clear(p_event_id uuid, p_checkpoint_id uuid)
-returns integer
-language plpgsql security definer set search_path = public as $$
-declare n integer;
-begin
-  if not coalesce(is_staff(), false) then raise exception 'not_allowed' using errcode = '42501'; end if;
-  delete from vendor_readings where event_id = p_event_id and checkpoint_id = p_checkpoint_id and vendor = 'ceia';
-  get diagnostics n = row_count;
-  return n;
-end $$;
-
 -- Gate numbers for an event: totals per checkpoint plus a time series. Staff only.
 create or replace function public.web_gate_readings(p_event_id uuid)
 returns jsonb
@@ -80,5 +68,5 @@ begin
         group by recorded_at) s), '[]'::jsonb));
 end $$;
 
-revoke execute on function public.web_gate_import(uuid, uuid, jsonb, jsonb), public.web_gate_clear(uuid, uuid), public.web_gate_readings(uuid) from public, anon;
-grant execute on function public.web_gate_import(uuid, uuid, jsonb, jsonb), public.web_gate_clear(uuid, uuid), public.web_gate_readings(uuid) to authenticated;
+revoke execute on function public.web_gate_import(uuid, uuid, jsonb, jsonb), public.web_gate_readings(uuid) from public, anon;
+grant execute on function public.web_gate_import(uuid, uuid, jsonb, jsonb), public.web_gate_readings(uuid) to authenticated;
