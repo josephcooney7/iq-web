@@ -86,7 +86,7 @@ body { background: #0e161d; color: #e9eef2; }
     <div><small>Alarms today</small><b id="tAlarm" style="color:#f08a80">–</b></div>
     <div><small>Alarms last 15 min</small><b id="t15">–</b></div>
     <div><small>Alarm rate (NetID report)</small><b id="tRate">–</b></div>
-    <div><small>Clear passes seen</small><b id="tPass">–</b></div>
+    <div><small>Clear passes</small><b id="tPass">–</b></div>
   </div>
   <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, sent to this screen the moment they happen. An alarm shows red for 8 seconds, then the screen goes back to CLEAR so the line keeps moving. Alarmed people wait in the strip until someone taps Cleared. Tap the screen once to turn on the alarm beep. <button type="button" class="linkbtn" id="testBtn">Show a test alarm</button></p>
 </div>
@@ -161,12 +161,10 @@ body { background: #0e161d; color: #e9eef2; }
     beep();
   }
   function showPass() {
-    // The next person got through clean: the line has moved on, so drop the big red (the alarmed person stays in the strip).
+    // No separate "passed" screen: it stays green and the numbers tick up. A clean pass after an alarm means the line moved on, so drop the red.
     if (!$("alarm").hidden) backToClear();
-    const c = $("calm"); c.classList.add("pass"); $("calmBig").textContent = "PASSED";
-    clearTimeout(passTimer);
-    passTimer = setTimeout(() => { c.classList.remove("pass"); $("calmBig").textContent = "CLEAR"; }, 1500);
   }
+
   $("clearBtn").addEventListener("click", backToClear);
   $("testBtn").addEventListener("click", () => showAlarm(Date.now(), "Test alarm", 0));
   $("ev").addEventListener("change", (e) => { eventId = e.target.value; lastId = null; views = 0; recent = []; queue = []; renderQueue(); load(); });
@@ -208,6 +206,7 @@ body { background: #0e161d; color: #e9eef2; }
       $("tAlarm").textContent = fmt(today.alarms);
       $("t15").textContent = fmt(today.alarms_15m);
       $("tPass").textContent = fmt(today.clears);
+      $("calmSub").textContent = fmt(today.clears) + " passed clean · " + fmt(today.alarms) + " alarms today";
       $("tRate").textContent = rate || "–";
       const cam = cams[0];
       const fresh = cam && cam.last_seen && Date.now() - new Date(cam.last_seen).getTime() < 90000;
