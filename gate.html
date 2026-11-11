@@ -37,6 +37,7 @@ body { background: #0e161d; color: #e9eef2; }
 .alarm .gs-sub { color: #ffe1de; }
 .gs-main button { min-height: 64px; padding: 0 40px; border-radius: 14px; font: inherit; font-size: 22px; font-weight: 700; cursor: pointer; }
 .btn-clear { background: #fff; color: #7d1a14; border: 0; }
+.aphoto { max-height: 38dvh; max-width: 100%; border-radius: 12px; border: 3px solid #fff; background: #000; }
 .linkbtn { background: none; border: 0; color: #5fb4d3; font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; padding: 0; min-height: 0; }
 .recent { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 0; color: #aebbc6; font-size: 14px; align-items: center; }
 .recent span { background: #15202a; border: 1px solid #273642; border-radius: 999px; padding: 3px 10px; }
@@ -64,6 +65,7 @@ body { background: #0e161d; color: #e9eef2; }
   <div class="gs-main alarm" id="alarm" hidden>
     <div class="big">ALARM</div>
     <div class="gs-sub" id="alarmSub"></div>
+    <img id="alarmPhoto" class="aphoto" alt="Person at the gate when it alarmed" hidden>
     <div class="gs-sub">Screen this person. Tap the button when they're cleared.</div>
     <button type="button" class="btn-clear" id="clearBtn">Person cleared</button>
   </div>
@@ -92,8 +94,21 @@ body { background: #0e161d; color: #e9eef2; }
 
   let pending = 0, passTimer = null;
   const secs = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
-  function showAlarm(text) {
+  // The photo of the person arrives about a second after the alarm. Shown here only, never saved by the page.
+  let photoFor = 0;
+  async function fetchPhoto(id) {
+    photoFor = id;
+    for (let i = 0; i < 6 && photoFor === id; i++) {
+      await new Promise((r) => setTimeout(r, 700));
+      try {
+        const b64 = await IQ.rpc("web_gate_photo", { p_gate_event_id: id });
+        if (b64 && photoFor === id) { const im = $("alarmPhoto"); im.src = "data:image/jpeg;base64," + b64; im.hidden = false; return; }
+      } catch { return; }
+    }
+  }
+  function showAlarm(text, id) {
     pending += 1;
+    if (id) fetchPhoto(id);
     $("alarmSub").textContent = text + (pending > 1 ? " · " + pending + " alarms waiting" : "");
     $("calm").hidden = true; $("alarm").hidden = false;
     try { navigator.vibrate && navigator.vibrate([400, 200, 400]); } catch {}
@@ -104,7 +119,7 @@ body { background: #0e161d; color: #e9eef2; }
     clearTimeout(passTimer);
     passTimer = setTimeout(() => { c.classList.remove("pass"); $("calmBig").textContent = "CLEAR"; }, 1500);
   }
-  $("clearBtn").addEventListener("click", () => { pending = 0; $("alarm").hidden = true; $("calm").hidden = false; });
+  $("clearBtn").addEventListener("click", () => { pending = 0; photoFor = 0; const im = $("alarmPhoto"); im.hidden = true; im.removeAttribute("src"); $("alarm").hidden = true; $("calm").hidden = false; });
   $("testBtn").addEventListener("click", () => showAlarm("Test alarm · " + clock(Date.now())));
   $("ev").addEventListener("change", (e) => { eventId = e.target.value; lastId = null; views = 0; recent = []; load(); });
 
@@ -137,7 +152,7 @@ body { background: #0e161d; color: #e9eef2; }
       // First load only sets the starting point, so old alarms don't flash.
       if (lastId !== null) {
         for (const e of evs) {
-          if (e.kind === "alarm") showAlarm((e.checkpoint ? e.checkpoint + " · " : "") + secs(e.at));
+          if (e.kind === "alarm") showAlarm((e.checkpoint ? e.checkpoint + " · " : "") + secs(e.at), Number(e.id));
           else showPass();
         }
       }
