@@ -63,12 +63,12 @@ body { background: #0e161d; color: #e9eef2; }
   </div>
 
   <div class="gs-tiles">
-    <div><small>Gate passes</small><b id="tPass">–</b></div>
-    <div><small>Alarms</small><b id="tAlarm" style="color:#f08a80">–</b></div>
-    <div><small>Alarm rate</small><b id="tRate">–</b></div>
-    <div><small>Alarms this hour</small><b id="tHour">–</b></div>
+    <div><small>Alarms today</small><b id="tAlarm" style="color:#f08a80">–</b></div>
+    <div><small>Alarms last 15 min</small><b id="t15">–</b></div>
+    <div><small>Alarm rate (NetID report)</small><b id="tRate">–</b></div>
+    <div><small>Clear passes seen</small><b id="tPass">–</b></div>
   </div>
-  <p class="gs-note" id="note">Numbers come from the OpenGate reports in IQ Events. This screen checks for new alarms every 15 seconds. It goes fully live once CEIA approves a direct feed.</p>
+  <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, checked every 2 seconds. Alarm rate comes from the NetID reports uploaded in IQ Events.</p>
 </div>
 
 <script src="/js/supabase.js"></script>
@@ -82,7 +82,6 @@ body { background: #0e161d; color: #e9eef2; }
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
   const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   let eventId = new URLSearchParams(location.search).get("event");
-  let lastAlarms = null, lastSeries = [];
 
   function showAlarm(text) {
     $("alarmSub").textContent = text;
@@ -93,40 +92,52 @@ body { background: #0e161d; color: #e9eef2; }
   }
   $("clearBtn").addEventListener("click", () => { $("alarm").hidden = true; $("calm").hidden = false; });
   $("testBtn").addEventListener("click", () => showAlarm("Test alarm · " + clock(Date.now())));
-  $("ev").addEventListener("change", (e) => { eventId = e.target.value; lastAlarms = null; load(); });
+  $("ev").addEventListener("change", (e) => { eventId = e.target.value; lastId = null; views = 0; load(); });
 
   // Keep the tablet screen on while this page is open.
   let lock = null;
   async function keepAwake() { try { if ("wakeLock" in navigator && !lock) { lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release", () => (lock = null)); } } catch {} }
 
-  async function load() {
-    try {
+  let lastId = null, rate = null, views = 0;
+  async function loadEvents() {
+    const sel = $("ev");
+    if (!sel.options.length || views++ % 30 === 0) {
       const view = await IQ.rpc("web_client_view", { p_event_id: eventId });
       eventId = (view.event && view.event.id) || null;
-      const sel = $("ev");
       sel.replaceChildren(...(view.events || []).map((e) => { const o = document.createElement("option"); o.value = e.id; o.textContent = e.name; o.selected = e.id === eventId; return o; }));
       history.replaceState(null, "", eventId ? "?event=" + eventId : location.pathname);
-      const g = eventId ? await IQ.rpc("web_gate_readings", { p_event_id: eventId }) : null;
-      const cps = (g && g.checkpoints) || [], series = (g && g.series) || [];
-      const pass = cps.reduce((s, c) => s + Number(c.transits || 0), 0);
-      const alarms = cps.reduce((s, c) => s + Number(c.alarms || 0), 0);
-      const now = series.length ? series[series.length - 1] : null;
-      $("tPass").textContent = cps.length ? fmt(pass) : "–";
-      $("tAlarm").textContent = cps.length ? fmt(alarms) : "–";
-      $("tRate").textContent = pass ? Math.round((alarms / pass) * 1000) / 10 + "%" : "–";
-      $("tHour").textContent = now ? fmt(now.alarms) : "–";
-      // New alarms since the last check: find which time slot they landed in.
-      if (lastAlarms !== null && alarms > lastAlarms) {
-        const n = alarms - lastAlarms;
-        const prev = new Map(lastSeries.map((s) => [s.t, Number(s.alarms || 0)]));
-        const hit = [...series].reverse().find((s) => Number(s.alarms || 0) > (prev.get(s.t) || 0)) || now;
-        const where = cps.length === 1 ? cps[0].name : "";
-        showAlarm((n === 1 ? "1 new alarm" : n + " new alarms") + (where ? " · " + where : "") + (hit ? " · " + clock(hit.t) : ""));
+      // Alarm rate from the NetID report numbers, refreshed once a minute.
+      try {
+        const g = eventId ? await IQ.rpc("web_gate_readings", { p_event_id: eventId }) : null;
+        const cps = (g && g.checkpoints) || [];
+        const pass = cps.reduce((s, c) => s + Number(c.transits || 0), 0), al = cps.reduce((s, c) => s + Number(c.alarms || 0), 0);
+        rate = pass ? Math.round((al / pass) * 1000) / 10 + "%" : null;
+      } catch { rate = null; }
+    }
+  }
+  async function load() {
+    try {
+      await loadEvents();
+      const r = eventId ? await IQ.rpc("web_gate_events", { p_event_id: eventId, p_after_id: lastId || 0 }) : null;
+      const today = (r && r.today) || {}, evs = (r && r.events) || [], cams = (r && r.cameras) || [];
+      // First load only sets the starting point, so old alarms don't flash.
+      if (lastId !== null) {
+        const alarms = evs.filter((e) => e.kind === "alarm");
+        if (alarms.length) {
+          const a = alarms[alarms.length - 1];
+          showAlarm((a.checkpoint ? a.checkpoint + " · " : "") + new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }) + (alarms.length > 1 ? " · " + alarms.length + " alarms" : ""));
+        }
       }
-      lastAlarms = alarms; lastSeries = series;
-      $("dot").className = "dot ok";
-      $("status").textContent = cps.length ? (cps.map((c) => c.name).join(", ") + " · checked " + clock(Date.now())) : "No gate numbers for this event yet";
-      $("calmSub").textContent = alarms ? "Last alarm logged " + (series.filter((s) => Number(s.alarms) > 0).map((s) => clock(s.t)).pop() || "") : "Waiting for the next alarm";
+      lastId = Math.max(lastId || 0, Number(today.max_id || 0), ...evs.map((e) => Number(e.id)));
+      $("tAlarm").textContent = fmt(today.alarms);
+      $("t15").textContent = fmt(today.alarms_15m);
+      $("tPass").textContent = fmt(today.clears);
+      $("tRate").textContent = rate || "–";
+      const cam = cams[0];
+      const fresh = cam && cam.last_seen && Date.now() - new Date(cam.last_seen).getTime() < 90000;
+      $("dot").className = "dot " + (fresh ? "ok" : "bad");
+      $("status").textContent = cam ? (cam.checkpoint + " · " + (cam.device || "IQ camera") + (fresh ? " watching" : " offline")) : "No IQ camera watching a gate at this event";
+      $("calmSub").textContent = today.last_alarm ? "Last alarm " + clock(today.last_alarm) : "Waiting for the next alarm";
     } catch (e) {
       $("dot").className = "dot bad";
       $("status").textContent = IQ.explain(e);
@@ -136,7 +147,7 @@ body { background: #0e161d; color: #e9eef2; }
   document.addEventListener("click", keepAwake, { once: true });
   keepAwake();
   await load();
-  setInterval(() => { if (!document.hidden) load(); }, 15000);
+  setInterval(() => { if (!document.hidden) load(); }, 2000);
 })();
 </script>
 </body>
