@@ -43,6 +43,14 @@ body { background: #0e161d; color: #e9eef2; }
 .recent { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 0; color: #aebbc6; font-size: 14px; align-items: center; }
 .recent span { background: #15202a; border: 1px solid #273642; border-radius: 999px; padding: 3px 10px; }
 .recent span.a { border-color: #f08a80; color: #f08a80; }
+.queue { display: flex; gap: 10px; overflow-x: auto; padding: 12px 16px 0; }
+.queue:empty { display: none; }
+.qcard { flex: none; width: 150px; background: #2a1414; border: 2px solid #f08a80; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.qcard img, .qcard .noimg { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: #000; }
+.qcard .noimg { display: flex; align-items: center; justify-content: center; color: #7f8e9a; font-size: 13px; }
+.qcard b { font-size: 15px; color: #ffe1de; }
+.qcard button { min-height: 44px; border: 0; border-radius: 8px; background: #fff; color: #7d1a14; font: inherit; font-weight: 700; cursor: pointer; }
+.qhead { padding: 12px 16px 0; color: #f08a80; font-weight: 600; }
 .gs-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: #273642; border-top: 1px solid #273642; }
 .gs-tiles div { background: #15202a; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .gs-tiles small { color: #aebbc6; font-size: 14px; }
@@ -67,10 +75,12 @@ body { background: #0e161d; color: #e9eef2; }
     <div class="big">ALARM</div>
     <div class="gs-sub" id="alarmSub"></div>
     <img id="alarmPhoto" class="aphoto" alt="Person at the gate when it alarmed" hidden>
-    <div class="gs-sub">Screen this person. Tap the button when they're cleared.</div>
-    <button type="button" class="btn-clear" id="clearBtn">Person cleared</button>
+    <div class="gs-sub">Pull this person aside for screening. The line keeps moving.</div>
+    <button type="button" class="btn-clear" id="clearBtn">OK</button>
   </div>
 
+  <div class="qhead" id="qhead" hidden>Waiting for secondary screening: tap Cleared when each person is done</div>
+  <div class="queue" id="queue"></div>
   <div class="recent" id="recent"></div>
   <div class="gs-tiles">
     <div><small>Alarms today</small><b id="tAlarm" style="color:#f08a80">–</b></div>
@@ -78,7 +88,7 @@ body { background: #0e161d; color: #e9eef2; }
     <div><small>Alarm rate (NetID report)</small><b id="tRate">–</b></div>
     <div><small>Clear passes seen</small><b id="tPass">–</b></div>
   </div>
-  <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, checked every 2 seconds. The screen stays red until someone taps "Person cleared". Tap the screen once to turn on the alarm beep. <button type="button" class="linkbtn" id="testBtn">Show a test alarm</button></p>
+  <p class="gs-note" id="note">Alarms come from the IQ camera watching the OpenGate's lights, checked every 2 seconds. An alarm shows red for 8 seconds, then the screen goes back to CLEAR so the line keeps moving. Alarmed people wait in the strip until someone taps Cleared. Tap the screen once to turn on the alarm beep. <button type="button" class="linkbtn" id="testBtn">Show a test alarm</button></p>
 </div>
 
 <script src="/js/supabase.js"></script>
@@ -93,19 +103,42 @@ body { background: #0e161d; color: #e9eef2; }
   const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   let eventId = new URLSearchParams(location.search).get("event");
 
-  let pending = 0, passTimer = null;
+  let passTimer = null, redTimer = null, showing = 0;
   const secs = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
-  // The photo of the person arrives about a second after the alarm. Shown here only, never saved by the page.
-  let photoFor = 0;
-  async function fetchPhoto(id) {
-    photoFor = id;
-    for (let i = 0; i < 6 && photoFor === id; i++) {
+  // People who alarmed and still need secondary screening. Photos live in this page's memory only.
+  let queue = [];
+  function renderQueue() {
+    $("qhead").hidden = !queue.length;
+    $("queue").replaceChildren(...queue.map((q) => {
+      const c = document.createElement("div"); c.className = "qcard";
+      const pic = q.photo ? Object.assign(document.createElement("img"), { src: "data:image/jpeg;base64," + q.photo, alt: "Person who alarmed at " + secs(q.at) })
+        : Object.assign(document.createElement("div"), { className: "noimg", textContent: q.id ? "Photo coming…" : "No photo" });
+      const t = Object.assign(document.createElement("b"), { textContent: secs(q.at) + (q.cp ? " · " + q.cp : "") });
+      const b = Object.assign(document.createElement("button"), { type: "button", textContent: "Cleared" });
+      b.addEventListener("click", () => { queue = queue.filter((x) => x !== q); renderQueue(); });
+      c.append(pic, t, b); return c;
+    }));
+  }
+  // The photo arrives about a second after the alarm.
+  async function fetchPhoto(q) {
+    for (let i = 0; i < 6; i++) {
       await new Promise((r) => setTimeout(r, 700));
+      if (!queue.includes(q)) return;
       try {
-        const b64 = await IQ.rpc("web_gate_photo", { p_gate_event_id: id });
-        if (b64 && photoFor === id) { const im = $("alarmPhoto"); im.src = "data:image/jpeg;base64," + b64; im.hidden = false; return; }
-      } catch { return; }
+        const b64 = await IQ.rpc("web_gate_photo", { p_gate_event_id: q.id });
+        if (b64) {
+          q.photo = b64; renderQueue();
+          if (showing === q.id) { const im = $("alarmPhoto"); im.src = "data:image/jpeg;base64," + b64; im.hidden = false; }
+          return;
+        }
+      } catch { break; }
     }
+    if (!q.photo) { q.id = 0; renderQueue(); }
+  }
+  function backToClear() {
+    clearTimeout(redTimer); showing = 0;
+    const im = $("alarmPhoto"); im.hidden = true; im.removeAttribute("src");
+    $("alarm").hidden = true; $("calm").hidden = false;
   }
   // Beep on alarm (browsers allow sound only after the first tap on the page).
   let ac = null;
@@ -115,23 +148,28 @@ body { background: #0e161d; color: #e9eef2; }
     try { [0, 0.35, 0.7].forEach((t) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ac.destination);
       g.gain.setValueAtTime(0.25, ac.currentTime + t); g.gain.setValueAtTime(0, ac.currentTime + t + 0.25); o.start(ac.currentTime + t); o.stop(ac.currentTime + t + 0.26); }); } catch {}
   }
-  function showAlarm(text, id) {
-    pending += 1;
-    if (id) fetchPhoto(id);
-    $("alarmSub").textContent = text + (pending > 1 ? " · " + pending + " alarms waiting" : "");
+  function showAlarm(at, cp, id) {
+    const q = { id: id || 0, at, cp, photo: null };
+    queue.push(q); renderQueue();
+    if (id) fetchPhoto(q);
+    showing = q.id;
+    const im = $("alarmPhoto"); im.hidden = true; im.removeAttribute("src");
+    $("alarmSub").textContent = (cp ? cp + " · " : "") + secs(at);
     $("calm").hidden = true; $("alarm").hidden = false;
+    clearTimeout(redTimer); redTimer = setTimeout(backToClear, 8000);
     try { navigator.vibrate && navigator.vibrate([400, 200, 400]); } catch {}
     beep();
   }
   function showPass() {
-    if (!$("alarm").hidden) return;
+    // The next person got through clean: the line has moved on, so drop the big red (the alarmed person stays in the strip).
+    if (!$("alarm").hidden) backToClear();
     const c = $("calm"); c.classList.add("pass"); $("calmBig").textContent = "PASSED";
     clearTimeout(passTimer);
     passTimer = setTimeout(() => { c.classList.remove("pass"); $("calmBig").textContent = "CLEAR"; }, 1500);
   }
-  $("clearBtn").addEventListener("click", () => { pending = 0; photoFor = 0; const im = $("alarmPhoto"); im.hidden = true; im.removeAttribute("src"); $("alarm").hidden = true; $("calm").hidden = false; });
-  $("testBtn").addEventListener("click", () => showAlarm("Test alarm · " + clock(Date.now())));
-  $("ev").addEventListener("change", (e) => { eventId = e.target.value; lastId = null; views = 0; recent = []; load(); });
+  $("clearBtn").addEventListener("click", backToClear);
+  $("testBtn").addEventListener("click", () => showAlarm(Date.now(), "Test alarm", 0));
+  $("ev").addEventListener("change", (e) => { eventId = e.target.value; lastId = null; views = 0; recent = []; queue = []; renderQueue(); load(); });
 
   // Keep the tablet screen on while this page is open.
   let lock = null;
@@ -162,7 +200,7 @@ body { background: #0e161d; color: #e9eef2; }
       // First load only sets the starting point, so old alarms don't flash.
       if (lastId !== null) {
         for (const e of evs) {
-          if (e.kind === "alarm") showAlarm((e.checkpoint ? e.checkpoint + " · " : "") + secs(e.at), Number(e.id));
+          if (e.kind === "alarm") showAlarm(e.at, e.checkpoint, Number(e.id));
           else showPass();
         }
       }
