@@ -142,7 +142,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   try { await IQ.requireLogin({ staff: true, bar }); } catch { return; }
 
   let all = [];
-  let view = "up";
+  let view = "who";
   const now = new Date();
   let calY = now.getFullYear(), calM = now.getMonth(); // month shown in the calendar (0-11)
   let selDay = null;
@@ -230,8 +230,9 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
 
   function draw() {
     document.querySelectorAll("#views button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === view)));
-    $("listView").hidden = view === "cal"; $("calView").hidden = view !== "cal";
+    $("listView").hidden = view === "cal" || view === "who"; $("calView").hidden = view !== "cal"; $("whoView").hidden = view !== "who";
     const today = S.todayIso();
+    if (view === "who") return drawWho();
     if (view === "cal") return drawCal();
     if (view === "up") {
       const evs = all.filter((e) => e.end_date >= today);
@@ -245,6 +246,123 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   document.querySelectorAll("#views button").forEach((b) => b.addEventListener("click", () => { view = b.dataset.v; draw(); }));
   $("prevM").addEventListener("click", () => { calM--; if (calM < 0) { calM = 11; calY--; } selDay = null; drawCal(); });
   $("nextM").addEventListener("click", () => { calM++; if (calM > 11) { calM = 0; calY++; } selDay = null; drawCal(); });
+
+  /* ---------- who's where: one square per person per day ---------- */
+  const PEOPLE = ["Joe", "Paul", "Kievon"];
+  const KIND = { office: "Office", off: "Day off", vacation: "Vacation", sick: "Sick" };
+  const monday = (d) => { const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()); t.setDate(t.getDate() - ((t.getDay() + 6) % 7)); return t; };
+  const dIso = (d) => S.iso(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  let wk = monday(new Date());
+  let who = {}; // "Joe|2026-11-11" -> entry
+  let whoReq = 0;
+  const shortClient = (c) => String(c || "").replace(/\s*\(.*?\)\s*/g, " ").trim() || c;
+  const evOn = (ds) => all.filter((e) => e.start_date <= ds && e.end_date >= ds);
+  const leadOn = (p, ds) => evOn(ds).filter((e) => (e.lead || "").toLowerCase() === p.toLowerCase());
+
+  async function loadWho() {
+    const req = ++whoReq;
+    const from = dIso(wk), to = dIso(addDays(wk, 6));
+    try {
+      const rows = await IQ.rpc("web_sched_who", { p_from: from, p_to: to });
+      if (req !== whoReq) return;
+      who = {}; rows.forEach((r) => (who[r.person + "|" + r.day] = r));
+      $("err").textContent = "";
+    } catch (e) { if (req === whoReq) $("err").textContent = IQ.explain(e); }
+    if (req === whoReq && view === "who") paintWho();
+  }
+
+  // What a square shows: [css class, main text, small text]
+  function square(p, ds) {
+    const r = who[p + "|" + ds];
+    if (r && r.kind === "event") {
+      const e = all.find((x) => x.id === r.event_id);
+      return ["k-event", e ? shortClient(e.client) : "Event", r.note || (e && e.location) || ""];
+    }
+    if (r && r.kind === "other") return ["k-other", r.note || "Something else", ""];
+    if (r && KIND[r.kind]) return ["k-" + r.kind, KIND[r.kind], r.note || ""];
+    const led = leadOn(p, ds);
+    if (led.length) return ["k-lead", shortClient(led[0].client), "Lead" + (led.length > 1 ? ` · +${led.length - 1} more` : "")];
+    return ["k-none", "Not set", ""];
+  }
+
+  function drawWho() {
+    const end = addDays(wk, 6);
+    const f = (d, o) => d.toLocaleDateString("en-US", o);
+    $("wName").textContent = f(wk, { month: "short", day: "numeric" }) + " – " + (wk.getMonth() === end.getMonth() ? end.getDate() : f(end, { month: "short", day: "numeric" }));
+    $("thisW").hidden = dIso(wk) === dIso(monday(new Date()));
+    tiles(all.filter((e) => e.end_date >= dIso(wk) && e.start_date <= dIso(end)), " this week");
+    paintWho(); loadWho();
+  }
+
+  function paintWho() {
+    const g = $("who"); g.replaceChildren();
+    g.insertAdjacentHTML("beforeend", `<div></div>` + PEOPLE.map((p) => `<div class="ph">${p}</div>`).join(""));
+    const today = S.todayIso();
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(wk, i), ds = dIso(d), isT = ds === today;
+      g.insertAdjacentHTML("beforeend", `<div class="dl${isT ? " today" : ""}"><small>${isT ? "Today" : d.toLocaleDateString("en-US", { weekday: "short" })}</small><b>${d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</b></div>`);
+      PEOPLE.forEach((p) => {
+        const [k, a, b] = square(p, ds);
+        const c = document.createElement("button"); c.type = "button";
+        c.className = "wc " + k + (isT ? " today" : "");
+        c.setAttribute("aria-label", `${p}, ${d.toDateString()}: ${a}${b ? ", " + b : ""}`);
+        c.innerHTML = `<b>${esc(a)}</b>` + (b ? `<small>${esc(b)}</small>` : "");
+        c.addEventListener("click", () => openWho(p, ds));
+        g.appendChild(c);
+      });
+    }
+  }
+
+  $("prevW").addEventListener("click", () => { wk = addDays(wk, -7); drawWho(); });
+  $("nextW").addEventListener("click", () => { wk = addDays(wk, 7); drawWho(); });
+  $("thisW").addEventListener("click", () => { wk = monday(new Date()); drawWho(); });
+
+  const wEd = $("whoEd");
+  let wSel = null; // { person, day, kind, event_id }
+  function markWho() {
+    wEd.querySelectorAll(".wpick button").forEach((b) => b.setAttribute("aria-pressed", String(!!wSel.kind &&
+      (b.dataset.ev ? wSel.kind === "event" && b.dataset.ev === wSel.event_id : b.dataset.kind === wSel.kind))));
+    $("whoNoteL").firstChild.textContent = wSel.kind === "other" ? "Where? " : "Note (optional)";
+  }
+  function openWho(p, ds) {
+    const r = who[p + "|" + ds];
+    const led = leadOn(p, ds);
+    wSel = { person: p, day: ds, kind: r ? r.kind : led.length ? "event" : null, event_id: r ? r.event_id : led.length ? led[0].id : null };
+    $("whoTitle").textContent = p + " · " + S.toLocal(ds).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+    const evs = evOn(ds);
+    $("whoEvBox").hidden = !evs.length;
+    $("whoOr").textContent = evs.length ? "Or" : "Where";
+    $("whoEvs").innerHTML = evs.map((e) => `<button type="button" data-ev="${e.id}">${esc(shortClient(e.client))}<small>${esc([e.location, e.lead ? "Lead: " + e.lead : ""].filter(Boolean).join(" · "))}</small></button>`).join("");
+    $("whoNote").value = (r && r.note) || "";
+    $("whoTo").value = ""; $("whoTo").min = ds;
+    $("whoBy").textContent = r && r.updated_by ? "Last changed by " + r.updated_by + " · " + new Date(r.updated_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : led.length && !r ? p + " is the lead on this event. Save to confirm it, or pick something else." : "";
+    $("whoErr").textContent = ""; $("whoClear").hidden = !r;
+    markWho(); wEd.showModal();
+  }
+  wEd.querySelectorAll(".wpick").forEach((g) => g.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button"); if (!b) return;
+    if (b.dataset.ev) { wSel.kind = "event"; wSel.event_id = b.dataset.ev; } else { wSel.kind = b.dataset.kind; wSel.event_id = null; }
+    markWho(); if (wSel.kind === "other") $("whoNote").focus();
+  }));
+  async function saveWho(kind) {
+    const to = $("whoTo").value;
+    if (to && to < wSel.day) { $("whoErr").textContent = "That date is before " + S.toLocal(wSel.day).toLocaleDateString("en-US", { month: "short", day: "numeric" }) + "."; return; }
+    if (kind === "other" && !$("whoNote").value.trim()) { $("whoErr").textContent = "Type where they'll be."; return; }
+    if (kind === undefined && !wSel.kind) { $("whoErr").textContent = "Pick an event or one of the choices."; return; }
+    $("whoSave").disabled = true;
+    try {
+      await IQ.rpc("web_sched_who_set", { p_person: wSel.person, p_from: wSel.day, p_to: to || wSel.day,
+        p_kind: kind === null ? "" : wSel.kind, p_event_id: kind === null ? null : wSel.event_id, p_note: $("whoNote").value });
+      wEd.close(); await loadWho();
+    } catch (e) {
+      const m = String(e && e.message);
+      $("whoErr").textContent = /bad_range/.test(m) ? "Pick an end date within two months." : /unknown_event/.test(m) ? "That event isn't on the schedule any more." : IQ.explain(e);
+    } finally { $("whoSave").disabled = false; }
+  }
+  $("whoSave").addEventListener("click", () => saveWho(wSel.kind === "other" ? "other" : undefined));
+  $("whoClear").addEventListener("click", () => saveWho(null));
+  $("whoCancel").addEventListener("click", () => wEd.close());
 
   /* ---------- add / edit ---------- */
   const ed = $("ed"), form = ed.querySelector("form");

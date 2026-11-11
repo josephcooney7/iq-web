@@ -88,12 +88,43 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
 .prev div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: var(--bg); }
 .prev div.skip { opacity: .55; }
 .prev small { display: block; color: var(--ink-3); }
+/* who's where */
+.wkhint { font-size: 14px; color: var(--ink-2); margin: 6px 0 0; text-align: center; }
+.linkish { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 600; padding: 0; min-height: 0; cursor: pointer; text-decoration: underline; }
+.who { display: grid; grid-template-columns: 74px repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+.who .ph { font-family: var(--f-display); font-size: 20px; font-weight: 700; letter-spacing: .02em; text-align: center; padding: 4px 0; }
+.who .dl { display: flex; flex-direction: column; justify-content: center; padding: 4px 2px; line-height: 1.15; }
+.who .dl b { font-family: var(--f-display); font-size: 20px; }
+.who .dl small { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+.who .dl.today b, .who .dl.today small { color: var(--accent); }
+.wc { margin: 0; height: 100%; min-height: 58px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; padding: 6px 8px; font-weight: 400; font-size: 14px; line-height: 1.25; cursor: pointer; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; overflow: hidden; }
+.wc b { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wc small { font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wc.k-none { color: var(--ink-3); border-style: dashed; background: transparent; align-items: center; }
+.wc.today { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); }
+.k-event { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.k-lead { background: color-mix(in srgb, var(--accent) 7%, var(--panel)); border: 1px dashed var(--accent); }
+.k-office { background: color-mix(in srgb, var(--ink-3) 16%, var(--panel)); }
+.k-off, .k-vacation { background: color-mix(in srgb, var(--warn) 16%, var(--panel)); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+.k-sick { background: color-mix(in srgb, var(--bad) 14%, var(--panel)); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+.k-other { background: var(--panel); border-color: var(--ink-3); }
+.wholeg i { border: 1px solid var(--line); }
+.wholeg i.k-event { background: color-mix(in srgb, var(--accent) 45%, var(--panel)); }
+.wholeg i.k-lead { background: color-mix(in srgb, var(--accent) 15%, var(--panel)); }
+.wholeg i.k-office { background: color-mix(in srgb, var(--ink-3) 45%, var(--panel)); }
+.wholeg i.k-off { background: color-mix(in srgb, var(--warn) 50%, var(--panel)); }
+.wholeg i.k-sick { background: color-mix(in srgb, var(--bad) 45%, var(--panel)); }
+.wholeg i.k-other { background: var(--panel); border-color: var(--ink-3); }
+.wholeg i.k-lead { border: 1px dashed var(--accent); }
+.wpick button { text-align: left; }
+.wpick button small { display: block; font-size: 12px; font-weight: 400; opacity: .85; }
+@media (max-width: 560px) { .who { grid-template-columns: 52px repeat(3, minmax(0, 1fr)); gap: 3px; } .wc { font-size: 13px; padding: 5px 6px; } .who .dl b { font-size: 18px; } }
 </style>
 </head>
 <body>
 <main>
   <h1>Schedule</h1>
-  <p class="sub">Every event in one place. Tap an event to fill in the lead, staffing and threat level.</p>
+  <p class="sub">Every event and where Joe, Paul and Kievon are each day. Tap an event to fill in the lead, staffing and threat level.</p>
 
   <div class="actions">
     <button class="primary" id="addBtn" type="button">+ Add event</button>
@@ -103,12 +134,19 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
   <div class="tiles" id="tiles"></div>
 
   <div class="views"><span class="seg" id="views">
-    <button type="button" data-v="up" aria-pressed="true">Upcoming</button>
+    <button type="button" data-v="who" aria-pressed="true">Who's where</button>
+    <button type="button" data-v="up" aria-pressed="false">Upcoming</button>
     <button type="button" data-v="cal" aria-pressed="false">Calendar</button>
     <button type="button" data-v="past" aria-pressed="false">Past</button>
   </span></div>
 
-  <div id="listView"></div>
+  <div id="whoView">
+    <div class="calhead"><button type="button" id="prevW" aria-label="Previous week">‹</button><b id="wName"></b><button type="button" id="nextW" aria-label="Next week">›</button></div>
+    <p class="wkhint">Tap a square to set where someone is that day. <button type="button" class="linkish" id="thisW">Back to this week</button></p>
+    <div class="who" id="who"></div>
+    <div class="legend wholeg"><span><i class="k-event"></i>Event</span><span><i class="k-lead"></i>Lead on an event (not set yet)</span><span><i class="k-office"></i>Office</span><span><i class="k-off"></i>Day off / vacation</span><span><i class="k-sick"></i>Sick</span><span><i class="k-other"></i>Other</span></div>
+  </div>
+  <div id="listView" hidden></div>
   <div id="calView" hidden>
     <div class="calhead"><button type="button" id="prevM" aria-label="Previous month">‹</button><b id="mName"></b><button type="button" id="nextM" aria-label="Next month">›</button></div>
     <div class="cal" id="cal"></div>
@@ -149,6 +187,29 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
       <button type="button" class="rm" id="rmBtn">Remove</button>
       <button type="button" id="cancelBtn">Cancel</button>
       <button type="button" class="primary" id="saveBtn">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="ed" id="whoEd">
+  <form method="dialog" novalidate>
+    <h3 id="whoTitle">Where</h3>
+    <div class="body">
+      <div id="whoEvBox"><span class="flbl" style="display:block;margin-top:12px">Events that day</span>
+      <div class="pick wpick" id="whoEvs"></div></div>
+      <span class="flbl" style="display:block;margin-top:12px" id="whoOr">Or</span>
+      <div class="pick wpick" id="whoKinds">
+        <button type="button" data-kind="office">Office</button><button type="button" data-kind="off">Day off</button><button type="button" data-kind="vacation">Vacation</button><button type="button" data-kind="sick">Sick</button><button type="button" data-kind="other">Something else</button>
+      </div>
+      <label class="f" id="whoNoteL">Note (optional)<input type="text" id="whoNote" maxlength="200" placeholder="e.g. driving the van, doing the K9 sweep"></label>
+      <label class="f">Same for every day through (optional)<input type="date" id="whoTo"></label>
+      <p class="byline" id="whoBy"></p>
+      <p class="msg bad" id="whoErr"></p>
+    </div>
+    <div class="btns">
+      <button type="button" class="rm" id="whoClear">Clear</button>
+      <button type="button" id="whoCancel">Cancel</button>
+      <button type="button" class="primary" id="whoSave">Save</button>
     </div>
   </form>
 </dialog>
