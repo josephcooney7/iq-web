@@ -1,4 +1,5 @@
-/* Reads the first sheet of an Excel (.xlsx) or CSV file in the browser, or rows pasted from a spreadsheet.
+/* Reads the first sheet of an Excel (.xlsx) or CSV file in the browser, the tables in a Word (.docx) file,
+   or rows pasted from a spreadsheet.
    Returns an array of rows, each an array of cell values (strings, numbers). No outside library. */
 window.SHEET = (() => {
   async function inflate(bytes) {
@@ -65,6 +66,38 @@ window.SHEET = (() => {
     return rows;
   }
 
+  // Word: every table row becomes a row (cells keep their line breaks as "; ").
+  // With no table, lines that use tabs between columns are read instead.
+  async function readDocx(buf) {
+    const files = await unzip(buf, (n) => n === "word/document.xml");
+    if (!files["word/document.xml"]) throw new Error("not_docx");
+    const doc = xml(files["word/document.xml"]);
+    const text = (el) => kids(el, "p").map((p) => {
+      let s = "";
+      p.querySelectorAll("*").forEach((n) => { if (n.localName === "t") s += n.textContent; else if (n.localName === "tab") s += "\t"; else if (n.localName === "br") s += " "; });
+      return s.trim();
+    }).filter(Boolean).join("; ").replace(/\t+/g, " ");
+    const rows = [];
+    kids(doc, "tr").forEach((tr) => {
+      if (tr.parentElement && kids(tr.parentElement, "tbl").length) return; // skip rows of an outer table holding a nested one
+      const r = [];
+      Array.from(tr.children).filter((c) => c.localName === "tc").forEach((tc) => {
+        r.push(text(tc));
+        const span = tc.getElementsByTagNameNS("*", "gridSpan")[0];
+        const n = span ? parseInt(span.getAttribute("w:val"), 10) || 1 : 1;
+        for (let k = 1; k < n; k++) r.push("");
+      });
+      rows.push(r);
+    });
+    if (rows.length) return rows;
+    const lines = kids(doc, "p").map((p) => {
+      let s = ""; p.querySelectorAll("*").forEach((n) => { if (n.localName === "t") s += n.textContent; else if (n.localName === "tab") s += "\t"; });
+      return s;
+    }).filter((l) => l.includes("\t"));
+    if (lines.length) return lines.map((l) => l.split("\t").map((c) => c.trim()));
+    throw new Error("no_table");
+  }
+
   // CSV or tab-separated text (pasting from Excel / Google Sheets gives tabs).
   function readText(text) {
     const tab = text.includes("\t");
@@ -85,10 +118,14 @@ window.SHEET = (() => {
   async function readFile(file) {
     const buf = await file.arrayBuffer();
     const head = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
-    if (head[0] === 0x50 && head[1] === 0x4b) return readXlsx(buf); // "PK" = zip = .xlsx
+    if (head[0] === 0x50 && head[1] === 0x4b) { // "PK" = zip = .xlsx or .docx
+      const names = await unzip(buf, (n) => n === "word/document.xml");
+      return names["word/document.xml"] ? readDocx(buf) : readXlsx(buf);
+    }
     if (/\.xls$/i.test(file.name)) throw new Error("old_xls");
+    if (/\.doc$/i.test(file.name)) throw new Error("old_doc");
     return readText(new TextDecoder().decode(buf));
   }
 
-  return { readFile, readText };
+  return { readFile, readText, readDocx };
 })();

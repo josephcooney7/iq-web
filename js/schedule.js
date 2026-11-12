@@ -428,7 +428,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   function showPreview(rows) {
     const mapped = S.mapRows(rows);
     const prev = $("impPrev"); prev.replaceChildren(); pending = [];
-    if (mapped.error) { $("impMsg").className = "msg bad"; $("impMsg").textContent = "Couldn't find the header row. It needs columns called Date and Client."; $("impGo").disabled = true; return; }
+    if (mapped.error) { $("impMsg").className = "msg bad"; $("impMsg").textContent = "Couldn't find the header row. The table needs columns called Date and Client."; $("impGo").disabled = true; return; }
     const have = new Set(all.map((e) => e.start_date + "|" + e.client.trim().toLowerCase()));
     const seen = new Set();
     let skip = 0, bad = 0;
@@ -448,7 +448,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     $("impGo").textContent = pending.length ? `Add ${pending.length} event${pending.length === 1 ? "" : "s"}` : "Add events";
   }
   $("impBtn").addEventListener("click", () => {
-    $("impFile").value = ""; $("impPaste").value = ""; $("impName").textContent = ".xlsx or .csv";
+    $("impFile").value = ""; $("impPaste").value = ""; $("impName").textContent = ".xlsx, .docx or .csv";
     $("impMsg").textContent = ""; $("impPrev").replaceChildren(); $("impGo").disabled = true; pending = [];
     imp.showModal();
   });
@@ -459,7 +459,11 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     try { showPreview(await SHEET.readFile(f)); }
     catch (e) {
       $("impMsg").className = "msg bad";
-      $("impMsg").textContent = /old_xls/.test(e.message) ? "That's an old .xls file. In Excel, use Save As and pick .xlsx, then try again." : "Couldn't read that file. Try saving it as .xlsx or .csv.";
+      const m = String(e && e.message);
+      $("impMsg").textContent = /old_xls/.test(m) ? "That's an old .xls file. In Excel, use Save As and pick .xlsx, then try again."
+        : /old_doc/.test(m) ? "That's an old .doc file. In Word, use Save As and pick .docx, then try again."
+        : /no_table/.test(m) ? "That Word file has no table of events. Put the events in a table with a header row (Date, Client, Location...), then try again."
+        : "Couldn't read that file. Try saving it as .xlsx, .docx or .csv.";
     }
   });
   $("impPaste").addEventListener("input", () => { const t = $("impPaste").value; if (t.trim()) showPreview(SHEET.readText(t)); });
