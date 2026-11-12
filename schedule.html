@@ -80,6 +80,7 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
 .pick.threat button { min-width: 44px; padding: 6px 0; }
 .pick.threat button[data-val=""] { padding: 6px 12px; }
 .pick button[aria-pressed="true"].m { background: var(--warn); border-color: var(--warn); color: #fff; }
+.chg { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent); font-size: 14px; }
 .byline { font-size: 13px; color: var(--ink-3); margin: 12px 0 0; }
 .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; margin-top: 12px; color: var(--ink-2); }
 .drop label { color: var(--accent); font-weight: 600; cursor: pointer; }
@@ -183,6 +184,7 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
         <button type="button" data-val="">Not set</button><button type="button" class="l" data-val="1">1</button><button type="button" class="l" data-val="2">2</button><button type="button" class="l" data-val="3">3</button><button type="button" class="m" data-val="4">4</button><button type="button" class="m" data-val="5">5</button><button type="button" class="m" data-val="6">6</button><button type="button" class="h" data-val="7">7</button><button type="button" class="h" data-val="8">8</button><button type="button" class="h" data-val="9">9</button><button type="button" class="h" data-val="10">10</button>
       </div>
       <label class="f">Notes<textarea name="notes" maxlength="2000" rows="2"></textarea></label>
+      <p class="chg" id="edChg" hidden></p>
       <p class="byline" id="byline"></p>
       <p class="msg bad" id="edErr"></p>
     </div>

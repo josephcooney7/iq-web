@@ -376,12 +376,14 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   let editing = null;
   let freeServices = ""; // services text that isn't one of the three boxes, kept as-is
 
-  // e = an event being changed; draft = a new event filled in from an email (not saved yet).
-  function openEd(e, draft) {
+  // e = an event being changed; draft = details read from an email (not saved yet).
+  // Both together = an email that changes an event already on the schedule.
+  function openEd(e, draft, changes) {
     editing = e || null;
-    const v = e || draft || null;
-    $("edTitle").textContent = e ? "Edit event" : draft ? "Check and save" : "Add event";
+    const v = e && draft ? { ...e, ...draft } : e || draft || null;
+    $("edTitle").textContent = draft ? (e ? "Check the changes and save" : "Check and save") : e ? "Edit event" : "Add event";
     $("rmBtn").hidden = !e; $("edErr").textContent = "";
+    $("edChg").hidden = !changes; $("edChg").textContent = changes ? "From the email: " + changes : "";
     form.start_date.value = v && v.start_date ? v.start_date : selDay || "";
     form.end_date.value = v && v.end_date && v.end_date !== v.start_date ? v.end_date : "";
     ["client", "contact", "times", "location", "notes"].forEach((k) => (form[k].value = (v && v[k]) || ""));
@@ -429,7 +431,14 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     return [keep, ...use.map(decode), ...nested].filter(Boolean).join("\n\n");
   }
   async function readEmail(text) {
-    const { data, error } = await IQ.sb.functions.invoke("sched-read-email", { body: { text } });
+    // Send the current and upcoming events too, so the reader can tell when an email changes one of them.
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const cut = (x, n) => String(x || "").slice(0, n);
+    const existing = all.filter((x) => (x.end_date || x.start_date) >= since).slice(0, 250).map((x) => ({
+      id: x.id, start_date: x.start_date, end_date: x.end_date, client: cut(x.client, 200), contact: cut(x.contact, 200),
+      services: x.services || "", times: cut(x.times, 400), location: cut(x.location, 200), notes: cut(x.notes, 400)
+    }));
+    const { data, error } = await IQ.sb.functions.invoke("sched-read-email", { body: { text, existing } });
     if (!error) return data;
     let body = null; try { body = await error.context.json(); } catch {}
     throw new Error((body && body.error) || error.message || "ai_error");
@@ -466,18 +475,29 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
       const evs = (res && res.events) || [];
       if (!evs.length) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = "Couldn't find an event in that email. Add it by hand with + Add event."; return; }
       $("mailMsg").className = "msg good";
-      $("mailMsg").textContent = evs.length === 1 ? "Found 1 event. Check it, then save." : `Found ${evs.length} events. Check each one, then save.`;
+      const nUpd = evs.filter((x) => x.match_id && all.some((y) => y.id === x.match_id)).length, nNew = evs.length - nUpd;
+      $("mailMsg").textContent = "Found " + [nUpd && (nUpd === 1 ? "1 change to an event already on the schedule" : nUpd + " changes to events already on the schedule"),
+        nNew && (nNew === 1 ? "1 new event" : nNew + " new events")].filter(Boolean).join(" and ") + ". Check each one, then save.";
       evs.forEach((ev) => {
-        const d = { ...ev, services: S.svcText(S.svcKeys((ev.services || []).join(" & "))), end_date: ev.end_date || ev.start_date };
+        const { match_id, changes, ...rest } = ev;
+        const d = { ...rest, services: S.svcText(S.svcKeys((ev.services || []).join(" & "))), end_date: ev.end_date || ev.start_date };
         const ok = /^\d{4}-\d{2}-\d{2}$/.test(d.start_date || "");
         if (!ok) d.start_date = ""; if (!/^\d{4}-\d{2}-\d{2}$/.test(d.end_date || "")) d.end_date = d.start_date;
-        const dup = ok && all.some((x) => x.start_date === d.start_date && S.clientKey(x.client) === S.clientKey(d.client));
+        const old = match_id ? all.find((x) => x.id === match_id) : null;
+        if (old) { // keep what the email didn't mention
+          Object.keys(d).forEach((k) => { if (!d[k]) delete d[k]; });
+          if (!d.services) delete d.services;
+        }
+        const dup = !old && ok && all.some((x) => x.start_date === d.start_date && S.clientKey(x.client) === S.clientKey(d.client));
+        const show = old ? { ...old, ...d } : d;
         const box = document.createElement("div"); box.className = "found";
-        box.innerHTML = `<div><b>${esc(ok ? S.whenText(d) : "Date not found")} · ${esc(d.client || "Client not found")}</b>
-          <small>${esc([d.services, d.location, d.times].filter(Boolean).join(" · "))}</small>
+        box.innerHTML = `<div>${old ? `<small style="color:var(--accent,#2563eb);font-weight:600">Change to an event already on the schedule</small><br>` : ""}
+          <b>${esc(show.start_date ? S.whenText(show) : "Date not found")} · ${esc(show.client || "Client not found")}</b>
+          <small>${esc([show.services, show.location, show.times].filter(Boolean).join(" · "))}</small>
+          ${old && changes ? `<small><b>What changed:</b> ${esc(changes)}</small>` : ""}
           ${dup ? `<small style="color:var(--warn)">Looks like this is already on the schedule.</small>` : ""}</div>`;
-        const b = document.createElement("button"); b.type = "button"; b.className = "primary"; b.textContent = "Check and add";
-        b.addEventListener("click", () => { mail.close(); openEd(null, d); });
+        const b = document.createElement("button"); b.type = "button"; b.className = "primary"; b.textContent = old ? "Check and update" : "Check and add";
+        b.addEventListener("click", () => { mail.close(); old ? openEd(old, d, changes) : openEd(null, d); });
         box.appendChild(b); $("mailPrev").appendChild(box);
       });
     } catch (e) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = mailErr(e.message); }
