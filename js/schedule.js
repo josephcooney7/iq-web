@@ -376,26 +376,113 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   let editing = null;
   let freeServices = ""; // services text that isn't one of the three boxes, kept as-is
 
-  function openEd(e) {
+  // e = an event being changed; draft = a new event filled in from an email (not saved yet).
+  function openEd(e, draft) {
     editing = e || null;
-    $("edTitle").textContent = e ? "Edit event" : "Add event";
+    const v = e || draft || null;
+    $("edTitle").textContent = e ? "Edit event" : draft ? "Check and save" : "Add event";
     $("rmBtn").hidden = !e; $("edErr").textContent = "";
-    form.start_date.value = e ? e.start_date : selDay || "";
-    form.end_date.value = e && e.end_date !== e.start_date ? e.end_date : "";
-    ["client", "contact", "times", "location", "notes"].forEach((k) => (form[k].value = (e && e[k]) || ""));
+    form.start_date.value = v && v.start_date ? v.start_date : selDay || "";
+    form.end_date.value = v && v.end_date && v.end_date !== v.start_date ? v.end_date : "";
+    ["client", "contact", "times", "location", "notes"].forEach((k) => (form[k].value = (v && v[k]) || ""));
     // Lead is Joe, Kievon or Paul. An older value that isn't one of them stays as its own choice.
     form.lead.querySelectorAll("option[data-extra]").forEach((o) => o.remove());
     const lead = (e && e.lead) || "";
     if (lead && ![...form.lead.options].some((o) => o.value === lead)) { const o = new Option(lead, lead); o.dataset.extra = "1"; form.lead.add(o); }
     form.lead.value = lead;
-    const keys = S.svcKeys(e && e.services);
-    freeServices = e && e.services && !keys.length ? e.services : "";
+    const keys = S.svcKeys(v && v.services);
+    freeServices = v && v.services && !keys.length ? v.services : "";
     $("svcs").querySelectorAll("input").forEach((i) => (i.checked = keys.includes(i.value)));
     setPick("staffing", e && e.staffing); setPick("threat_level", e && e.threat_level ? String(e.threat_level) : "");
     $("byline").textContent = e && e.updated_by ? "Last changed by " + e.updated_by + " · " + new Date(e.updated_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
     ed.showModal();
   }
   $("addBtn").addEventListener("click", () => openEd(null));
+
+  /* ---------- add from an email (AI reads it on the server; the key never reaches this page) ---------- */
+  const mail = $("mail");
+  // A saved .eml file: keep the readable text parts, decode them, drop attachments.
+  function emlText(raw) {
+    const qp = (t) => t.replace(/=\r?\n/g, "").replace(/(=[0-9A-F]{2})+/gi, (m) => {
+      try { return new TextDecoder().decode(new Uint8Array(m.slice(1).split("=").map((h) => parseInt(h, 16)))); } catch { return m; }
+    });
+    const b64 = (t) => { try { return new TextDecoder().decode(Uint8Array.from(atob(t.replace(/\s+/g, "")), (c) => c.charCodeAt(0))); } catch { return ""; } };
+    const html = (t) => { const d = new DOMParser().parseFromString(t, "text/html"); d.querySelectorAll("style,script").forEach((x) => x.remove()); return (d.body ? d.body.innerText || d.body.textContent : t) || ""; };
+    const part = (p) => {
+      const cut = p.search(/\r?\n\r?\n/); if (cut < 0) return { head: p, body: "" };
+      return { head: p.slice(0, cut), body: p.slice(cut).trim() };
+    };
+    const decode = ({ head, body }) => {
+      const enc = (head.match(/content-transfer-encoding:\s*([\w-]+)/i) || [])[1] || "";
+      let t = /base64/i.test(enc) ? b64(body) : /quoted/i.test(enc) ? qp(body) : body;
+      return /content-type:\s*text\/html/i.test(head) ? html(t) : t;
+    };
+    const top = part(raw);
+    const keep = top.head.split(/\r?\n(?=\S)/).filter((l) => /^(from|to|cc|date|subject):/i.test(l)).join("\n");
+    const bound = (raw.match(/boundary="?([^";\r\n]+)"?/i) || [])[1];
+    if (!bound) return keep + "\n\n" + decode(top);
+    const parts = raw.split("--" + bound).slice(1).map(part);
+    const plain = parts.filter((p) => /content-type:\s*text\/plain/i.test(p.head) && !/attachment/i.test(p.head));
+    const use = plain.length ? plain : parts.filter((p) => /content-type:\s*text\/html/i.test(p.head));
+    // Nested multipart (common in Outlook/Gmail): read it again from inside.
+    const nested = parts.filter((p) => /content-type:\s*multipart\//i.test(p.head)).map((p) => emlText(p.head + "\n\n" + p.body));
+    return [keep, ...use.map(decode), ...nested].filter(Boolean).join("\n\n");
+  }
+  async function readEmail(text) {
+    const { data, error } = await IQ.sb.functions.invoke("sched-read-email", { body: { text } });
+    if (!error) return data;
+    let body = null; try { body = await error.context.json(); } catch {}
+    throw new Error((body && body.error) || error.message || "ai_error");
+  }
+  const mailErr = (m) => ({
+    not_allowed: "Your login doesn't have access to this yet. Ask Joe to turn it on.",
+    no_key: "The email reader isn't switched on yet. Joe needs to add the Anthropic key first.",
+    bad_key: "The Anthropic key isn't working. Joe needs to check it.",
+    busy: "The email reader is busy right now. Try again in a minute.",
+    too_long: "That email is too long to read in one go. Paste just the messages about the job.",
+    empty: "Paste the email first.",
+    refused: "The email reader couldn't read this one. Add the event by hand instead."
+  })[m] || "Couldn't read the email right now. Try again, or add the event by hand.";
+
+  $("mailBtn").addEventListener("click", () => {
+    $("mailText").value = ""; $("mailFile").value = ""; $("mailName").textContent = ".eml or .txt";
+    $("mailMsg").className = "msg"; $("mailMsg").textContent = ""; $("mailPrev").replaceChildren();
+    mail.showModal();
+  });
+  $("mailCancel").addEventListener("click", () => mail.close());
+  $("mailFile").addEventListener("change", async () => {
+    const f = $("mailFile").files[0]; if (!f) return;
+    $("mailName").textContent = f.name;
+    const raw = await f.text();
+    $("mailText").value = (/\.eml$/i.test(f.name) || /^(received|from|return-path|mime-version|delivered-to):/im.test(raw.slice(0, 2000)) ? emlText(raw) : raw).trim().slice(0, 60000);
+  });
+  $("mailGo").addEventListener("click", async () => {
+    const text = $("mailText").value.trim();
+    if (!text) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = mailErr("empty"); return; }
+    $("mailGo").disabled = true; $("mailPrev").replaceChildren();
+    $("mailMsg").className = "msg"; $("mailMsg").textContent = "Reading the email… this takes a few seconds.";
+    try {
+      const res = await readEmail(text);
+      const evs = (res && res.events) || [];
+      if (!evs.length) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = "Couldn't find an event in that email. Add it by hand with + Add event."; return; }
+      $("mailMsg").className = "msg good";
+      $("mailMsg").textContent = evs.length === 1 ? "Found 1 event. Check it, then save." : `Found ${evs.length} events. Check each one, then save.`;
+      evs.forEach((ev) => {
+        const d = { ...ev, services: S.svcText(S.svcKeys((ev.services || []).join(" & "))), end_date: ev.end_date || ev.start_date };
+        const ok = /^\d{4}-\d{2}-\d{2}$/.test(d.start_date || "");
+        if (!ok) d.start_date = ""; if (!/^\d{4}-\d{2}-\d{2}$/.test(d.end_date || "")) d.end_date = d.start_date;
+        const dup = ok && all.some((x) => x.start_date === d.start_date && S.clientKey(x.client) === S.clientKey(d.client));
+        const box = document.createElement("div"); box.className = "found";
+        box.innerHTML = `<div><b>${esc(ok ? S.whenText(d) : "Date not found")} · ${esc(d.client || "Client not found")}</b>
+          <small>${esc([d.services, d.location, d.times].filter(Boolean).join(" · "))}</small>
+          ${dup ? `<small style="color:var(--warn)">Looks like this is already on the schedule.</small>` : ""}</div>`;
+        const b = document.createElement("button"); b.type = "button"; b.className = "primary"; b.textContent = "Check and add";
+        b.addEventListener("click", () => { mail.close(); openEd(null, d); });
+        box.appendChild(b); $("mailPrev").appendChild(box);
+      });
+    } catch (e) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = mailErr(e.message); }
+    finally { $("mailGo").disabled = false; }
+  });
   $("cancelBtn").addEventListener("click", () => ed.close());
   $("saveBtn").addEventListener("click", async () => {
     const keys = [...$("svcs").querySelectorAll("input:checked")].map((i) => i.value);
