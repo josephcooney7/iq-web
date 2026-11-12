@@ -128,7 +128,7 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
 
   <div class="actions">
     <button class="primary" id="addBtn" type="button">+ Add event</button>
-    <button id="impBtn" type="button">Import from a spreadsheet</button>
+    <button id="impBtn" type="button">Import events (Excel or Word)</button>
   </div>
 
   <div class="tiles" id="tiles"></div>
@@ -218,8 +218,8 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
   <form method="dialog" novalidate>
     <h3>Import events</h3>
     <div class="body">
-      <p class="sub" style="margin-top:8px">Pick an Excel or CSV file laid out like the Special Events Security Tracker (Date, Client, Point of Contact, Services, Times, Location). Or copy the rows in Excel or Google Sheets, header row included, and paste them below.</p>
-      <div class="drop"><label>Choose a file<input type="file" id="impFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><br><small id="impName">.xlsx or .csv</small></div>
+      <p class="sub" style="margin-top:8px">Pick an Excel, Word or CSV file laid out like the Special Events Security Tracker, with columns such as Date, Client, Point of Contact, Services, Times and Location. In a Word file the events need to be in a table. Or copy the rows in Excel or Google Sheets, header row included, and paste them below.</p>
+      <div class="drop"><label>Choose a file<input type="file" id="impFile" accept=".xlsx,.docx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label><br><small id="impName">.xlsx, .docx or .csv</small></div>
       <label class="f">Or paste rows here<textarea id="impPaste" rows="3" placeholder="Paste from Excel or Google Sheets"></textarea></label>
       <p class="msg" id="impMsg"></p>
       <div class="prev" id="impPrev"></div>
