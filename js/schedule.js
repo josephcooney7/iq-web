@@ -235,6 +235,25 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     });
   }
 
+  // Who's where for the weeks the calendar shows, so each day can show Joe, Paul and Kievon.
+  let calWho = {}, calWhoKey = "", calWhoReq = 0;
+  async function loadCalWho(from, to) {
+    const key = from + "|" + to; if (key === calWhoKey) return;
+    calWhoKey = key; const req = ++calWhoReq;
+    try {
+      const rows = await IQ.rpc("web_sched_who", { p_from: from, p_to: to });
+      if (req !== calWhoReq) return;
+      calWho = {}; rows.forEach((r) => (calWho[r.person + "|" + r.day] = r));
+      if (view === "cal") drawCal();
+    } catch (e) { if (req === calWhoReq) { calWhoKey = ""; $("err").textContent = IQ.explain(e); } }
+  }
+  const pClass = (p) => "p-" + p.toLowerCase();
+  // Phone-size words for a calendar square: "Javits", "Office", "Off", "Vac".
+  const SHORT = { "k-off": "Off", "k-vacation": "Vac", "k-sick": "Sick", "k-office": "Office" };
+  const shortPlace = (x) => SHORT[x.k] || (String(x.a).replace(/^(the|t\s*&\s*m)\s+/i, (m) => m).split(/[\s,/]+/).find((w) => w.length > 2 && !/^the$/i.test(w)) || x.a);
+  // Each person's place that day, or nothing when it isn't set.
+  const placesOn = (ds) => PEOPLE.map((p) => { const [k, a, b] = square(p, ds, calWho); return k === "k-none" ? null : { p, a, b, k }; }).filter(Boolean);
+
   function drawCal() {
     const first = new Date(calY, calM, 1);
     const mStart = S.iso(calY, calM + 1, 1), mEnd = S.iso(calY, calM + 1, new Date(calY, calM + 1, 0).getDate());
@@ -244,6 +263,8 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     const cal = $("cal"); cal.replaceChildren();
     ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach((d) => cal.insertAdjacentHTML("beforeend", `<div class="dow">${d}</div>`));
     const start = new Date(calY, calM, 1 - first.getDay());
+    loadCalWho(S.iso(start.getFullYear(), start.getMonth() + 1, start.getDate()),
+      (() => { const e = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 41); return S.iso(e.getFullYear(), e.getMonth() + 1, e.getDate()); })());
     const today = S.todayIso();
     for (let i = 0; i < 42; i++) {
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
@@ -254,7 +275,8 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
       cell.className = "day" + (d.getMonth() !== calM ? " out" : "") + (ds === today ? " today" : "") + (ds === selDay ? " sel" : "");
       cell.setAttribute("aria-label", d.toDateString() + ", " + evs.length + " events");
       cell.innerHTML = `<span class="n">${d.getDate()}</span>` + evs.slice(0, 3).map((e) => `<span class="chip2 ${cls(e)}">${esc(e.client)}</span>`).join("")
-        + (evs.length > 3 ? `<span class="n">+${evs.length - 3}</span>` : "");
+        + (evs.length > 3 ? `<span class="n">+${evs.length - 3}</span>` : "")
+        + placesOn(ds).map((x) => `<span class="pw ${pClass(x.p)}" title="${esc(x.p + ": " + x.a)}"><i>${x.p[0]}</i><span class="lg">${esc(x.a)}</span><span class="sm">${esc(shortPlace(x))}</span></span>`).join("");
       cell.addEventListener("click", () => { selDay = ds; drawCal(); });
       cal.appendChild(cell);
     }
@@ -263,6 +285,11 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     const h = document.createElement("h2"); h.style.marginTop = "18px";
     h.textContent = (selDay ? S.toLocal(selDay).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : "All events this month") + (needOnly ? " · need staff or a lead" : "");
     dl.appendChild(h);
+    if (selDay) {
+      const pl = placesOn(selDay);
+      dl.insertAdjacentHTML("beforeend", `<div class="daywho">${PEOPLE.map((p) => { const x = pl.find((y) => y.p === p);
+        return `<div class="${pClass(p)}"><b>${p}</b><span>${x ? esc(x.a) + (x.b ? " · " + esc(x.b) : "") : "Not set"}</span></div>`; }).join("")}</div>`);
+    }
     if (!shown.length) dl.insertAdjacentHTML("beforeend", `<p class="empty" style="margin-top:4px">No events${selDay ? " on this day" : " this month"}.</p>`);
     shown.forEach((e) => dl.appendChild(card(e)));
   }
@@ -312,8 +339,8 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   }
 
   // What a square shows: [css class, main text, small text]
-  function square(p, ds) {
-    const r = who[p + "|" + ds];
+  function square(p, ds, map = who) {
+    const r = map[p + "|" + ds];
     if (r && r.kind === "event") {
       const e = all.find((x) => x.id === r.event_id);
       return ["k-event", e ? shortClient(e.client) : "Event", r.note || (e && e.location) || ""];
@@ -336,7 +363,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
 
   function paintWho() {
     const g = $("who"); g.replaceChildren();
-    g.insertAdjacentHTML("beforeend", `<div></div>` + PEOPLE.map((p) => `<div class="ph">${p}</div>`).join(""));
+    g.insertAdjacentHTML("beforeend", `<div></div>` + PEOPLE.map((p) => `<div class="ph ${pClass(p)}">${p}</div>`).join(""));
     const today = S.todayIso();
     for (let i = 0; i < 7; i++) {
       const d = addDays(wk, i), ds = dIso(d), isT = ds === today;
@@ -393,7 +420,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     try {
       await IQ.rpc("web_sched_who_set", { p_person: wSel.person, p_from: wSel.day, p_to: to || wSel.day,
         p_kind: kind === null ? "" : wSel.kind, p_event_id: kind === null ? null : wSel.event_id, p_note: $("whoNote").value });
-      wEd.close(); await loadWho();
+      wEd.close(); calWhoKey = ""; await loadWho();
     } catch (e) {
       const m = String(e && e.message);
       $("whoErr").textContent = /bad_range/.test(m) ? "Pick an end date within two months." : /unknown_event/.test(m) ? "That event isn't on the schedule any more." : IQ.explain(e);

@@ -73,8 +73,20 @@ dialog.menu .opt small { display: block; font-weight: 400; font-size: 14px; colo
 .day .chip2 { display: block; border-radius: 4px; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--ink-3) 18%, transparent); font-size: 11px; line-height: 1.35; }
 .day .chip2.staffed { background: color-mix(in srgb, var(--good) 22%, transparent); }
 .day .chip2.unstaffed { background: color-mix(in srgb, var(--bad) 22%, transparent); }
-@media (max-width: 560px) { .day { min-height: 56px; } .day .chip2 { font-size: 0; height: 7px; padding: 0; background: color-mix(in srgb, var(--ink-3) 55%, transparent); }
+@media (max-width: 560px) { .day { min-height: 56px; } .day .pw { font-size: 10px; padding: 0 2px; border-left-width: 2px; } .cal .day .pw .lg { display: none; } .cal .day .pw .sm { display: inline; } .day .pw i { margin-right: 2px; } .day .chip2 { font-size: 0; height: 7px; padding: 0; background: color-mix(in srgb, var(--ink-3) 55%, transparent); }
   .day .chip2.staffed { background: var(--good); } .day .chip2.unstaffed { background: var(--bad); } }
+/* one colour per person, used on the calendar and in Who's where */
+:root { --joe: #2f6fde; --paul: #8b46d6; --kievon: #d4691c; }
+.p-joe { --pc: var(--joe); } .p-paul { --pc: var(--paul); } .p-kievon { --pc: var(--kievon); }
+.who .ph { color: var(--pc); }
+.day .pw { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; line-height: 1.3; padding: 0 3px; border-left: 3px solid var(--pc);
+  background: color-mix(in srgb, var(--pc) 12%, transparent); border-radius: 0 3px 3px 0; color: var(--ink); }
+.day .pw .sm { display: none; }
+.day .pw i { font-style: normal; font-weight: 700; color: var(--pc); margin-right: 3px; }
+.daywho { display: grid; gap: 6px; margin: 6px 0 4px; }
+.daywho div { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 8px; border-left: 5px solid var(--pc); background: color-mix(in srgb, var(--pc) 10%, var(--panel)); }
+.daywho b { color: var(--pc); min-width: 56px; }
+.legend i.p-joe, .legend i.p-paul, .legend i.p-kievon { background: var(--pc); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-2); margin-top: 8px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: color-mix(in srgb, var(--ink-3) 40%, transparent); }
 .legend i.s { background: var(--good); } .legend i.u { background: var(--bad); }
@@ -162,7 +174,8 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
   <div id="calView" hidden>
     <div class="calhead"><button type="button" id="prevM" aria-label="Previous month">‹</button><b id="mName"></b><button type="button" id="nextM" aria-label="Next month">›</button></div>
     <div class="cal" id="cal"></div>
-    <div class="legend"><span><i class="s"></i>Staffed with a lead</span><span><i class="u"></i>Still needs staff or a lead</span></div>
+    <div class="legend"><span><i class="s"></i>Staffed with a lead</span><span><i class="u"></i>Still needs staff or a lead</span><span><i class="p-joe"></i>Joe</span><span><i class="p-paul"></i>Paul</span><span><i class="p-kievon"></i>Kievon</span></div>
+    <p class="wkhint">Tap a day to see the events and where everyone is.</p>
     <div id="dayList"></div>
   </div>
   <p class="msg bad" id="err"></p>
