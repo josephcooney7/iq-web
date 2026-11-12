@@ -156,29 +156,68 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   /* ---------- drawing ---------- */
   // Green once the event is Staffed AND has a lead; red until both are set.
   const cls = (e) => (e.staffing === "Staffed" && e.lead ? "staffed" : "unstaffed");
+  const ready = (e) => e.staffing === "Staffed" && !!e.lead;
+  // Everything the save function expects, from an event as listed.
+  const asSave = (e) => ({ id: e.id, start_date: e.start_date, end_date: e.end_date, client: e.client || "", contact: e.contact || "",
+    services: e.services || "", times: e.times || "", location: e.location || "", lead: e.lead || "", staffing: e.staffing || "",
+    threat_level: e.threat_level ? String(e.threat_level) : "", notes: e.notes || "" });
+  async function quickSet(e, change, btn) {
+    btn.disabled = true;
+    try { await IQ.rpc("web_sched_save", { p: { ...asSave(e), ...change } }); await load(); }
+    catch (err) { btn.disabled = false; $("err").textContent = IQ.explain(err); }
+  }
   function card(e) {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "ev " + cls(e);
+    const b = document.createElement("div");
+    b.className = "ev " + cls(e); b.tabIndex = 0; b.setAttribute("role", "button");
+    b.setAttribute("aria-label", S.whenText(e) + ", " + e.client + ". Open to edit.");
     const keys = S.svcKeys(e.services);
     const svcTags = keys.length ? S.SVC.filter((s) => keys.includes(s.key)).map((s) => `<span class="tag svc">${s.short}</span>`).join("")
       : e.services ? `<span class="tag svc">${esc(e.services)}</span>` : "";
-    const staff = e.staffing === "Staffed" ? `<span class="tag in">Staffed</span>` : e.staffing === "Unstaffed" ? `<span class="tag dmg">Unstaffed</span>` : `<span class="tag blank">Staffing not set</span>`;
+    const staff = e.staffing === "Staffed" ? `<span class="tag in">Staffed</span>` : e.staffing === "Unstaffed" ? `<span class="tag dmg">Unstaffed</span>` : "";
     const tn = +e.threat_level;
-    const th = tn ? `<span class="tag ${tn >= 7 ? "dmg" : tn >= 4 ? "med" : "in"}">Threat: ${tn}/10</span>` : `<span class="tag blank">Threat not set</span>`;
+    const th = tn ? `<span class="tag ${tn >= 7 ? "dmg" : tn >= 4 ? "med" : "in"}">Threat ${tn}/10</span>` : "";
+    const needs = [!e.lead && "a lead", e.staffing !== "Staffed" && "staff"].filter(Boolean);
     b.innerHTML = `<div class="row1"><span class="when">${esc(S.whenText(e))}</span><span class="client">${esc(e.client)}</span></div>
       <div class="meta">${[e.location, e.times].filter(Boolean).map(esc).join("<br>")}</div>
-      <div class="meta">Lead: ${e.lead ? "<b>" + esc(e.lead) + "</b>" : "not set"}</div>
+      ${e.lead ? `<div class="meta">Lead: <b>${esc(e.lead)}</b></div>` : ""}
+      ${needs.length ? `<div class="needs">Needs ${needs.join(" and ")}</div>` : ""}
       <div class="tags">${svcTags}${staff}${th}</div>`;
+    if (needs.length && view !== "past") {
+      const q = document.createElement("div"); q.className = "quick";
+      if (!e.lead) {
+        q.insertAdjacentHTML("beforeend", "<span>Lead:</span>");
+        ["Joe", "Paul", "Kievon"].forEach((n) => {
+          const x = document.createElement("button"); x.type = "button"; x.textContent = n;
+          x.addEventListener("click", (ev) => { ev.stopPropagation(); quickSet(e, { lead: n }, x); });
+          q.appendChild(x);
+        });
+      }
+      if (e.staffing !== "Staffed") {
+        const x = document.createElement("button"); x.type = "button"; x.className = "st"; x.textContent = "✓ Mark staffed";
+        x.addEventListener("click", (ev) => { ev.stopPropagation(); quickSet(e, { staffing: "Staffed" }, x); });
+        q.appendChild(x);
+      }
+      b.appendChild(q);
+    }
     b.addEventListener("click", () => openEd(e));
+    b.addEventListener("keydown", (ev) => { if ((ev.key === "Enter" || ev.key === " ") && ev.target === b) { ev.preventDefault(); openEd(e); } });
     return b;
   }
 
+  // One line: how many events, what kind, and a button that shows only the ones still missing staff or a lead.
+  let needOnly = false;
+  const keep = (evs) => (needOnly ? evs.filter((e) => !ready(e)) : evs);
   function tiles(evs, label) {
     const c = S.counts(evs);
-    $("tiles").innerHTML = [
-      ["Events" + label, c.events], ["Clients", c.clients], ["K9", c.k9], ["Screening", c.screening], ["Guard details", c.guards],
-      ["Need staff or lead", c.notStaffed, c.notStaffed ? "alert" : ""]
-    ].map(([t, n, k]) => `<div class="tile2 ${k || ""}"><b>${n}</b><small>${t}</small></div>`).join("");
+    const kinds = [[c.guards, c.guards === 1 ? "guard detail" : "guard details"], [c.screening, "screening"], [c.k9, "K9"]].filter(([n]) => n).map(([n, t]) => `${n} ${t}`).join(" · ");
+    const box = $("tiles");
+    box.innerHTML = `<span><b>${c.events}</b> event${c.events === 1 ? "" : "s"}${label}${kinds ? " · " + kinds : ""}</span>`;
+    if (c.notStaffed || needOnly) {
+      const nb = document.createElement("button"); nb.type = "button"; nb.className = "need"; nb.setAttribute("aria-pressed", String(needOnly));
+      nb.textContent = needOnly ? "Showing only the " + c.notStaffed + " that need staff or a lead ✕" : c.notStaffed + " need staff or a lead";
+      nb.addEventListener("click", () => { needOnly = !needOnly; if (view === "who" || view === "past") view = "up"; draw(); });
+      box.appendChild(nb);
+    } else if (c.events) box.insertAdjacentHTML("beforeend", `<span class="ok">✓ All staffed with a lead</span>`);
   }
 
   function drawList(evs, emptyText) {
@@ -196,6 +235,25 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     });
   }
 
+  // Who's where for the weeks the calendar shows, so each day can show Joe, Paul and Kievon.
+  let calWho = {}, calWhoKey = "", calWhoReq = 0;
+  async function loadCalWho(from, to) {
+    const key = from + "|" + to; if (key === calWhoKey) return;
+    calWhoKey = key; const req = ++calWhoReq;
+    try {
+      const rows = await IQ.rpc("web_sched_who", { p_from: from, p_to: to });
+      if (req !== calWhoReq) return;
+      calWho = {}; rows.forEach((r) => (calWho[r.person + "|" + r.day] = r));
+      if (view === "cal") drawCal();
+    } catch (e) { if (req === calWhoReq) { calWhoKey = ""; $("err").textContent = IQ.explain(e); } }
+  }
+  const pClass = (p) => "p-" + p.toLowerCase();
+  // Phone-size words for a calendar square: "Javits", "Office", "Off", "Vac".
+  const SHORT = { "k-off": "Off", "k-vacation": "Vac", "k-sick": "Sick", "k-office": "Office" };
+  const shortPlace = (x) => SHORT[x.k] || (String(x.a).replace(/^(the|t\s*&\s*m)\s+/i, (m) => m).split(/[\s,/]+/).find((w) => w.length > 2 && !/^the$/i.test(w)) || x.a);
+  // Each person's place that day, or nothing when it isn't set.
+  const placesOn = (ds) => PEOPLE.map((p) => { const [k, a, b] = square(p, ds, calWho); return k === "k-none" ? null : { p, a, b, k }; }).filter(Boolean);
+
   function drawCal() {
     const first = new Date(calY, calM, 1);
     const mStart = S.iso(calY, calM + 1, 1), mEnd = S.iso(calY, calM + 1, new Date(calY, calM + 1, 0).getDate());
@@ -205,6 +263,8 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     const cal = $("cal"); cal.replaceChildren();
     ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach((d) => cal.insertAdjacentHTML("beforeend", `<div class="dow">${d}</div>`));
     const start = new Date(calY, calM, 1 - first.getDay());
+    loadCalWho(S.iso(start.getFullYear(), start.getMonth() + 1, start.getDate()),
+      (() => { const e = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 41); return S.iso(e.getFullYear(), e.getMonth() + 1, e.getDate()); })());
     const today = S.todayIso();
     for (let i = 0; i < 42; i++) {
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
@@ -215,15 +275,21 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
       cell.className = "day" + (d.getMonth() !== calM ? " out" : "") + (ds === today ? " today" : "") + (ds === selDay ? " sel" : "");
       cell.setAttribute("aria-label", d.toDateString() + ", " + evs.length + " events");
       cell.innerHTML = `<span class="n">${d.getDate()}</span>` + evs.slice(0, 3).map((e) => `<span class="chip2 ${cls(e)}">${esc(e.client)}</span>`).join("")
-        + (evs.length > 3 ? `<span class="n">+${evs.length - 3}</span>` : "");
+        + (evs.length > 3 ? `<span class="n">+${evs.length - 3}</span>` : "")
+        + placesOn(ds).map((x) => `<span class="pw ${pClass(x.p)}" title="${esc(x.p + ": " + x.a)}"><i>${x.p[0]}</i><span class="lg">${esc(x.a)}</span><span class="sm">${esc(shortPlace(x))}</span></span>`).join("");
       cell.addEventListener("click", () => { selDay = ds; drawCal(); });
       cal.appendChild(cell);
     }
     const dl = $("dayList"); dl.replaceChildren();
-    const shown = selDay ? all.filter((e) => e.start_date <= selDay && e.end_date >= selDay) : inMonth;
+    const shown = keep(selDay ? all.filter((e) => e.start_date <= selDay && e.end_date >= selDay) : inMonth);
     const h = document.createElement("h2"); h.style.marginTop = "18px";
-    h.textContent = selDay ? S.toLocal(selDay).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : "All events this month";
+    h.textContent = (selDay ? S.toLocal(selDay).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : "All events this month") + (needOnly ? " · need staff or a lead" : "");
     dl.appendChild(h);
+    if (selDay) {
+      const pl = placesOn(selDay);
+      dl.insertAdjacentHTML("beforeend", `<div class="daywho">${PEOPLE.map((p) => { const x = pl.find((y) => y.p === p);
+        return `<div class="${pClass(p)}"><b>${p}</b><span>${x ? esc(x.a) + (x.b ? " · " + esc(x.b) : "") : "Not set"}</span></div>`; }).join("")}</div>`);
+    }
     if (!shown.length) dl.insertAdjacentHTML("beforeend", `<p class="empty" style="margin-top:4px">No events${selDay ? " on this day" : " this month"}.</p>`);
     shown.forEach((e) => dl.appendChild(card(e)));
   }
@@ -236,7 +302,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     if (view === "cal") return drawCal();
     if (view === "up") {
       const evs = all.filter((e) => e.end_date >= today);
-      tiles(evs, " coming up"); drawList(evs, "Nothing coming up. Tap + Add event, or import a spreadsheet.");
+      tiles(evs, " coming up"); drawList(keep(evs), needOnly ? "Everything coming up is staffed with a lead." : "Nothing coming up. Tap + Add to put one in.");
     } else {
       const evs = all.filter((e) => e.end_date < today).reverse();
       tiles(evs, " done"); drawList(evs, "No past events yet.");
@@ -273,8 +339,8 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
   }
 
   // What a square shows: [css class, main text, small text]
-  function square(p, ds) {
-    const r = who[p + "|" + ds];
+  function square(p, ds, map = who) {
+    const r = map[p + "|" + ds];
     if (r && r.kind === "event") {
       const e = all.find((x) => x.id === r.event_id);
       return ["k-event", e ? shortClient(e.client) : "Event", r.note || (e && e.location) || ""];
@@ -297,7 +363,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
 
   function paintWho() {
     const g = $("who"); g.replaceChildren();
-    g.insertAdjacentHTML("beforeend", `<div></div>` + PEOPLE.map((p) => `<div class="ph">${p}</div>`).join(""));
+    g.insertAdjacentHTML("beforeend", `<div></div>` + PEOPLE.map((p) => `<div class="ph ${pClass(p)}">${p}</div>`).join(""));
     const today = S.todayIso();
     for (let i = 0; i < 7; i++) {
       const d = addDays(wk, i), ds = dIso(d), isT = ds === today;
@@ -354,7 +420,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     try {
       await IQ.rpc("web_sched_who_set", { p_person: wSel.person, p_from: wSel.day, p_to: to || wSel.day,
         p_kind: kind === null ? "" : wSel.kind, p_event_id: kind === null ? null : wSel.event_id, p_note: $("whoNote").value });
-      wEd.close(); await loadWho();
+      wEd.close(); calWhoKey = ""; await loadWho();
     } catch (e) {
       const m = String(e && e.message);
       $("whoErr").textContent = /bad_range/.test(m) ? "Pick an end date within two months." : /unknown_event/.test(m) ? "That event isn't on the schedule any more." : IQ.explain(e);
@@ -399,6 +465,10 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     $("byline").textContent = e && e.updated_by ? "Last changed by " + e.updated_by + " · " + new Date(e.updated_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
     ed.showModal();
   }
+  const menu = $("addMenu");
+  $("addMenuBtn").addEventListener("click", () => menu.showModal());
+  $("addMenuClose").addEventListener("click", () => menu.close());
+  menu.querySelectorAll(".opt").forEach((b) => b.addEventListener("click", () => menu.close(), true));
   $("addBtn").addEventListener("click", () => openEd(null));
 
   /* ---------- add from an email (AI reads it on the server; the key never reaches this page) ---------- */
@@ -473,7 +543,7 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
     try {
       const res = await readEmail(text);
       const evs = (res && res.events) || [];
-      if (!evs.length) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = "Couldn't find an event in that email. Add it by hand with + Add event."; return; }
+      if (!evs.length) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = "Couldn't find an event in that email. Add it by hand with + Add."; return; }
       $("mailMsg").className = "msg good";
       const isOld = (x) => (x.match_id && all.some((y) => y.id === x.match_id)) ||
         all.some((y) => y.start_date === x.start_date && S.clientKey(y.client) === S.clientKey(x.client));
