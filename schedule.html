@@ -80,6 +80,7 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
 .pick.threat button { min-width: 44px; padding: 6px 0; }
 .pick.threat button[data-val=""] { padding: 6px 12px; }
 .pick button[aria-pressed="true"].m { background: var(--warn); border-color: var(--warn); color: #fff; }
+.chg { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent); font-size: 14px; }
 .byline { font-size: 13px; color: var(--ink-3); margin: 12px 0 0; }
 .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; margin-top: 12px; color: var(--ink-2); }
 .drop label { color: var(--accent); font-weight: 600; cursor: pointer; }
@@ -88,6 +89,8 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
 .prev div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: var(--bg); }
 .prev div.skip { opacity: .55; }
 .prev small { display: block; color: var(--ink-3); }
+.prev .found { display: grid; gap: 8px; }
+.prev .found button { justify-self: start; min-height: 40px; padding: 6px 14px; }
 /* who's where */
 .wkhint { font-size: 14px; color: var(--ink-2); margin: 6px 0 0; text-align: center; }
 .linkish { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 600; padding: 0; min-height: 0; cursor: pointer; text-decoration: underline; }
@@ -128,6 +131,7 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
 
   <div class="actions">
     <button class="primary" id="addBtn" type="button">+ Add event</button>
+    <button id="mailBtn" type="button">Add from an email</button>
     <button id="impBtn" type="button">Import events (Excel or Word)</button>
   </div>
 
@@ -180,6 +184,7 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
         <button type="button" data-val="">Not set</button><button type="button" class="l" data-val="1">1</button><button type="button" class="l" data-val="2">2</button><button type="button" class="l" data-val="3">3</button><button type="button" class="m" data-val="4">4</button><button type="button" class="m" data-val="5">5</button><button type="button" class="m" data-val="6">6</button><button type="button" class="h" data-val="7">7</button><button type="button" class="h" data-val="8">8</button><button type="button" class="h" data-val="9">9</button><button type="button" class="h" data-val="10">10</button>
       </div>
       <label class="f">Notes<textarea name="notes" maxlength="2000" rows="2"></textarea></label>
+      <p class="chg" id="edChg" hidden></p>
       <p class="byline" id="byline"></p>
       <p class="msg bad" id="edErr"></p>
     </div>
@@ -210,6 +215,23 @@ dialog.ed .btns .rm { flex: 0 0 auto; color: var(--bad); }
       <button type="button" class="rm" id="whoClear">Clear</button>
       <button type="button" id="whoCancel">Cancel</button>
       <button type="button" class="primary" id="whoSave">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="ed" id="mail">
+  <form method="dialog" novalidate>
+    <h3>Add from an email</h3>
+    <div class="body">
+      <p class="sub" style="margin-top:8px">Paste the email thread, or pick a saved email (.eml). AI reads it and fills in the event for you to check before saving.</p>
+      <label class="f">Email thread<textarea id="mailText" rows="8" maxlength="60000" placeholder="Paste the whole email thread here"></textarea></label>
+      <div class="drop"><label>Or choose a saved email<input type="file" id="mailFile" accept=".eml,.txt,message/rfc822,text/plain"></label><br><small id="mailName">.eml or .txt</small></div>
+      <p class="msg" id="mailMsg"></p>
+      <div class="prev" id="mailPrev"></div>
+    </div>
+    <div class="btns">
+      <button type="button" id="mailCancel">Close</button>
+      <button type="button" class="primary" id="mailGo">Read the email</button>
     </div>
   </form>
 </dialog>
