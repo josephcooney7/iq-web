@@ -475,7 +475,9 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
       const evs = (res && res.events) || [];
       if (!evs.length) { $("mailMsg").className = "msg bad"; $("mailMsg").textContent = "Couldn't find an event in that email. Add it by hand with + Add event."; return; }
       $("mailMsg").className = "msg good";
-      const nUpd = evs.filter((x) => x.match_id && all.some((y) => y.id === x.match_id)).length, nNew = evs.length - nUpd;
+      const isOld = (x) => (x.match_id && all.some((y) => y.id === x.match_id)) ||
+        all.some((y) => y.start_date === x.start_date && S.clientKey(y.client) === S.clientKey(x.client));
+      const nUpd = evs.filter(isOld).length, nNew = evs.length - nUpd;
       $("mailMsg").textContent = "Found " + [nUpd && (nUpd === 1 ? "1 change to an event already on the schedule" : nUpd + " changes to events already on the schedule"),
         nNew && (nNew === 1 ? "1 new event" : nNew + " new events")].filter(Boolean).join(" and ") + ". Check each one, then save.";
       evs.forEach((ev) => {
@@ -483,7 +485,9 @@ if (typeof document !== "undefined" && window.IQ) (async () => {
         const d = { ...rest, services: S.svcText(S.svcKeys((ev.services || []).join(" & "))), end_date: ev.end_date || ev.start_date };
         const ok = /^\d{4}-\d{2}-\d{2}$/.test(d.start_date || "");
         if (!ok) d.start_date = ""; if (!/^\d{4}-\d{2}-\d{2}$/.test(d.end_date || "")) d.end_date = d.start_date;
-        const old = match_id ? all.find((x) => x.id === match_id) : null;
+        // The reader's match, or else an event already on the schedule for the same day and client.
+        const old = (match_id && all.find((x) => x.id === match_id)) ||
+          (d.start_date && all.find((x) => x.start_date === d.start_date && S.clientKey(x.client) === S.clientKey(d.client))) || null;
         if (old) { // keep what the email didn't mention
           Object.keys(d).forEach((k) => { if (!d[k]) delete d[k]; });
           if (!d.services) delete d.services;
