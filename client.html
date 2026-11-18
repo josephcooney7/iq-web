@@ -535,7 +535,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       fact("Busiest checkpoint", busiest ? busiest.name : "–", busiest && total ? Math.round((busiest.total_in / total) * 100) + "% of arrivals" : ""),
       fact("Avg per checkpoint per hour", counted.length && hours ? fmt(Math.round(total / counted.length / hours)) : "–"),
       waitFact, incFact]));
-    $("rHourWrap").hidden = !G;
+    $("rHourWrap").hidden = true; // Joe: page 1 + updates + incidents only
     $("rHourRows").replaceChildren(...(G ? G.arr.map((x) => { const tr = el("tr");
       tr.append(el("td", null, time(x.t) + " to " + time(new Date(x.t).getTime() + 3600000)), el("td", "r", fmt(x.v)), el("td", "r", fmt(x.a)), el("td", "r", pct(x.a, x.v))); return tr; }) : []));
     barChart($("rChart"), arr, { label: (v) => fmt(v) + (G ? " people that hour" : " people"), short: (v) => fmt(v), empty: "No counts for this event." });
