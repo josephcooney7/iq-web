@@ -253,6 +253,13 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         <h3 style="font-size:18px;margin-bottom:6px">Arrivals through the event</h3>
         <div id="rChart"></div>
       </div>
+      <div id="rHourWrap" hidden>
+        <h3 style="font-size:18px;margin-bottom:6px">Hour by hour</h3>
+        <div class="tablebox"><table>
+          <thead><tr><th>Hour</th><th class="r">Guests screened</th><th class="r">Metal detector alarms</th><th class="r">Alarm rate</th></tr></thead>
+          <tbody id="rHourRows"></tbody>
+        </table></div>
+      </div>
       <div id="rGateWrap" hidden>
         <h3 style="font-size:18px;margin-bottom:6px">Metal detector screening</h3>
         <div class="facts" id="rGateFacts"></div>
@@ -397,14 +404,15 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   function gateFallback(buckets) {
     const g = data.gate;
     if (buckets.some((b) => Number(b.n) > 0) || !g || (asClient && !g.show_gate)) return null;
-    const ser = (g.series || []).map((x) => ({ t: x.t, v: Number(x.transits || 0) }));
+    const ser = (g.series || []).map((x) => ({ t: x.t, v: Number(x.transits || 0), a: Number(x.alarms || 0) }));
     const on = ser.filter((x) => x.v > 0);
     if (!on.length) return null;
     const arr = ser.filter((x) => x.t >= on[0].t && x.t <= on[on.length - 1].t);
     const peak = arr.reduce((p, x) => (x.v > p.v ? x : p), arr[0]);
     arr.forEach((x) => { x.peak = x === peak; });
     const cps = (g.checkpoints || []).filter((c) => Number(c.transits) > 0).map((c) => ({ name: c.name, total_in: Number(c.transits) }));
-    return { arr, peak, first: on[0].t, total: cps.reduce((a, c) => a + c.total_in, 0), cps };
+    const alarms = (g.checkpoints || []).reduce((a, c) => a + Number(c.alarms || 0), 0);
+    return { arr, peak, first: on[0].t, total: cps.reduce((a, c) => a + c.total_in, 0), alarms, cps };
   }
 
   const ROUTINE = new Set(["k9_sweep"]);
@@ -511,18 +519,27 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     $("rTitle").textContent = (ev.name || "") + ": SUMMARY";
     $("rSub").textContent = $("evSub").textContent;
     const fact = (label, value, note) => { const d = el("div"); d.append(el("span", "label", label), el("span", "num", value)); if (note) d.append(el("small", null, note)); return d; };
-    $("rFacts").replaceChildren(
-      fact("Total screened", fmt(total), G ? "through the OpenGate" : ""),
-      G ? fact("Busiest hour", fmt(G.peak.v), time(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000))
-        : fact("Busiest 15 minutes", peak && peak.n ? fmt(peak.n) : "–", peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : ""),
+    // Gate-only events: one set of numbers and one chart, plus an hour-by-hour table (no repeated gate section).
+    const waitFact = avgWait == null && manual != null
+        ? fact("Security wait", manual, "checked on site")
+        : fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera");
+    const incFact = fact("Incidents logged", String(incidents.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", "));
+    $("rFacts").replaceChildren(...(G ? [
+      fact("Total screened", fmt(total), "through " + (G.cps.length === 1 ? G.cps[0].name : G.cps.length + " gates")),
+      fact("Busiest hour", fmt(G.peak.v), time(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000)),
+      fact("Metal detector alarms", fmt(G.alarms), total && G.alarms ? "about 1 in " + Math.max(1, Math.round(total / G.alarms)) + " guests" : ""),
+      fact("Alarm rate", pct(G.alarms, total)),
+      waitFact, incFact] : [
+      fact("Total screened", fmt(total)),
+      fact("Busiest 15 minutes", peak && peak.n ? fmt(peak.n) : "–", peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : ""),
       fact("Busiest checkpoint", busiest ? busiest.name : "–", busiest && total ? Math.round((busiest.total_in / total) * 100) + "% of arrivals" : ""),
       fact("Avg per checkpoint per hour", counted.length && hours ? fmt(Math.round(total / counted.length / hours)) : "–"),
-      avgWait == null && manual != null
-        ? fact("Security wait", manual, "checked on site")
-        : fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera"),
-      fact("Incidents logged", String(incidents.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", ")));
+      waitFact, incFact]));
+    $("rHourWrap").hidden = !G;
+    $("rHourRows").replaceChildren(...(G ? G.arr.map((x) => { const tr = el("tr");
+      tr.append(el("td", null, time(x.t) + " to " + time(new Date(x.t).getTime() + 3600000)), el("td", "r", fmt(x.v)), el("td", "r", fmt(x.a)), el("td", "r", pct(x.a, x.v))); return tr; }) : []));
     barChart($("rChart"), arr, { label: (v) => fmt(v) + (G ? " people that hour" : " people"), short: (v) => fmt(v), empty: "No counts for this event." });
-    renderGateReport();
+    renderGateReport(G);
     $("rUpdWrap").hidden = !routine.length;
     $("rUpd").replaceChildren(...routine.map((u) => updateRow(u, false)));
     $("rInc").replaceChildren(...(incidents.length ? incidents.map((u) => updateRow(u, false)) : [el("div", "empty", asClient ? "No incident reports shared with the client." : "No incident reports for this event.")]));
@@ -707,9 +724,9 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   }
 
   // Report section: only when staff ticked "Show gate numbers on the client report" for this event.
-  function renderGateReport() {
+  function renderGateReport(G) {
     const g = data.gate, gcs = (g && g.checkpoints) || [];
-    $("rGateWrap").hidden = !(g && g.show_gate && gcs.length);
+    $("rGateWrap").hidden = !!G || !(g && g.show_gate && gcs.length);
     if ($("rGateWrap").hidden) return;
     const pass = gcs.reduce((a, c) => a + Number(c.transits || 0), 0), alarms = gcs.reduce((a, c) => a + Number(c.alarms || 0), 0);
     const fact = (label, value, note) => { const d = el("div"); d.append(el("span", "label", label), el("span", "num", value)); if (note) d.append(el("small", null, note)); return d; };
