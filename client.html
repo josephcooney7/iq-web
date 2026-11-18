@@ -508,7 +508,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     const routine = updates.filter((u) => ROUTINE.has(u.category)), incidents = updates.filter((u) => !ROUTINE.has(u.category));
     const byCat = {};
     incidents.forEach((u) => { const k = u.category_label || "Other"; byCat[k] = (byCat[k] || 0) + 1; });
-    $("rTitle").textContent = (ev.name || "") + ": summary";
+    $("rTitle").textContent = (ev.name || "") + ": SUMMARY";
     $("rSub").textContent = $("evSub").textContent;
     const fact = (label, value, note) => { const d = el("div"); d.append(el("span", "label", label), el("span", "num", value)); if (note) d.append(el("small", null, note)); return d; };
     $("rFacts").replaceChildren(
