@@ -263,6 +263,10 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         <h3 style="font-size:16px;margin:12px 0 6px">Alarms through the event</h3>
         <div id="rGateChart"></div>
       </div>
+      <div id="rUpdWrap" hidden>
+        <h3 style="font-size:18px;margin-bottom:6px">Updates from your Stapleton team</h3>
+        <div id="rUpd"></div>
+      </div>
       <div id="rIncWrap">
         <h3 style="font-size:18px;margin-bottom:6px">Incidents</h3>
         <div id="rInc"></div>
@@ -392,7 +396,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   // Hourly arrivals from the OpenGate report, used only when the event has no IQ camera counts.
   function gateFallback(buckets) {
     const g = data.gate;
-    if (buckets.length || !g || (asClient && !g.show_gate)) return null;
+    if (buckets.some((b) => Number(b.n) > 0) || !g || (asClient && !g.show_gate)) return null;
     const ser = (g.series || []).map((x) => ({ t: x.t, v: Number(x.transits || 0) }));
     const on = ser.filter((x) => x.v > 0);
     if (!on.length) return null;
@@ -402,6 +406,8 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     const cps = (g.checkpoints || []).filter((c) => Number(c.transits) > 0).map((c) => ({ name: c.name, total_in: Number(c.transits) }));
     return { arr, peak, first: on[0].t, total: cps.reduce((a, c) => a + c.total_in, 0), cps };
   }
+
+  const ROUTINE = new Set(["k9_sweep"]);
 
   /* ---------- render ---------- */
   function render() {
@@ -498,8 +504,10 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     const counted = G ? G.cps : cps.filter((c) => Number(c.total_in) > 0);
     const busiest = counted.slice().sort((a, b) => b.total_in - a.total_in)[0];
     const avgWait = waits.length ? Math.round(waits.reduce((a, w) => a + Number(w.wait), 0) / waits.length) : null;
+    // Routine updates (e.g. canine sweeps) are listed as team updates, not counted as incidents.
+    const routine = updates.filter((u) => ROUTINE.has(u.category)), incidents = updates.filter((u) => !ROUTINE.has(u.category));
     const byCat = {};
-    updates.forEach((u) => { const k = u.category_label || "Other"; byCat[k] = (byCat[k] || 0) + 1; });
+    incidents.forEach((u) => { const k = u.category_label || "Other"; byCat[k] = (byCat[k] || 0) + 1; });
     $("rTitle").textContent = (ev.name || "") + ": summary";
     $("rSub").textContent = $("evSub").textContent;
     const fact = (label, value, note) => { const d = el("div"); d.append(el("span", "label", label), el("span", "num", value)); if (note) d.append(el("small", null, note)); return d; };
@@ -512,10 +520,12 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       avgWait == null && manual != null
         ? fact("Security wait", manual, "checked on site")
         : fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera"),
-      fact("Incidents logged", String(updates.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", ")));
+      fact("Incidents logged", String(incidents.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", ")));
     barChart($("rChart"), arr, { label: (v) => fmt(v) + (G ? " people that hour" : " people"), short: (v) => fmt(v), empty: "No counts for this event." });
     renderGateReport();
-    $("rInc").replaceChildren(...(updates.length ? updates.map((u) => updateRow(u, false)) : [el("div", "empty", asClient ? "No incident reports shared with the client." : "No incident reports for this event.")]));
+    $("rUpdWrap").hidden = !routine.length;
+    $("rUpd").replaceChildren(...routine.map((u) => updateRow(u, false)));
+    $("rInc").replaceChildren(...(incidents.length ? incidents.map((u) => updateRow(u, false)) : [el("div", "empty", asClient ? "No incident reports shared with the client." : "No incident reports for this event.")]));
 
     // all events
     $("evList").replaceChildren(...(data.events || []).map((e) => {
