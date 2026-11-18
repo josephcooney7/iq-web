@@ -392,7 +392,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   // Hourly arrivals from the OpenGate report, used only when the event has no IQ camera counts.
   function gateFallback(buckets) {
     const g = data.gate;
-    if (buckets.length || !g || (asClient && !g.show_gate)) return null;
+    if (buckets.some((b) => Number(b.n) > 0) || !g || (asClient && !g.show_gate)) return null;
     const ser = (g.series || []).map((x) => ({ t: x.t, v: Number(x.transits || 0) }));
     const on = ser.filter((x) => x.v > 0);
     if (!on.length) return null;
