@@ -182,7 +182,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     <div class="tiles">
       <div class="tile"><span class="label">People through screening</span><span class="num" id="tTotal">–</span><span class="note" id="tTotalNote">&nbsp;</span></div>
       <div class="tile"><span class="label">Last 15 minutes</span><span class="num" id="tLast">–</span><span class="note" id="tLastNote">&nbsp;</span></div>
-      <div class="tile"><span class="label">Busiest 15 minutes</span><span class="num" id="tPeak">–</span><span class="note" id="tPeakNote">&nbsp;</span></div>
+      <div class="tile"><span class="label" id="tPeakLabel">Busiest 15 minutes</span><span class="num" id="tPeak">–</span><span class="note" id="tPeakNote">&nbsp;</span></div>
       <div class="tile"><span class="label">Security wait right now</span><span class="num" id="tWait">–</span><span class="note" id="tWaitNote">&nbsp;</span></div>
       <div class="tile"><span class="label">Checkpoints reporting</span><span class="num" id="tCps">–</span><span class="note" id="tCpsNote">&nbsp;</span></div>
     </div>
@@ -389,6 +389,20 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   }
   const waitColor = (m) => (m > 15 ? "var(--w3)" : m >= 10 ? "var(--w2)" : "var(--w1)");
 
+  // Hourly arrivals from the OpenGate report, used only when the event has no IQ camera counts.
+  function gateFallback(buckets) {
+    const g = data.gate;
+    if (buckets.length || !g || (asClient && !g.show_gate)) return null;
+    const ser = (g.series || []).map((x) => ({ t: x.t, v: Number(x.transits || 0) }));
+    const on = ser.filter((x) => x.v > 0);
+    if (!on.length) return null;
+    const arr = ser.filter((x) => x.t >= on[0].t && x.t <= on[on.length - 1].t);
+    const peak = arr.reduce((p, x) => (x.v > p.v ? x : p), arr[0]);
+    arr.forEach((x) => { x.peak = x === peak; });
+    const cps = (g.checkpoints || []).filter((c) => Number(c.transits) > 0).map((c) => ({ name: c.name, total_in: Number(c.transits) }));
+    return { arr, peak, first: on[0].t, total: cps.reduce((a, c) => a + c.total_in, 0), cps };
+  }
+
   /* ---------- render ---------- */
   function render() {
     if (!data) return;
@@ -423,19 +437,23 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       document.createTextNode(last ? " · last count " + time(last) + " · refreshes every 30 seconds" : ""));
 
     // tiles
-    const total = cps.reduce((a, c) => a + Number(c.total_in || 0), 0);
+    let total = cps.reduce((a, c) => a + Number(c.total_in || 0), 0);
     const last15 = cps.reduce((a, c) => a + Number(c.last15_in || 0), 0);
     const peak = buckets.reduce((p, b) => (b.n > (p ? p.n : -1) ? b : p), null);
     const withWait = cps.filter((c) => c.wait_now != null);
     const waitNow = withWait.length ? Math.round(withWait.reduce((a, c) => a + Number(c.wait_now), 0) / withWait.length) : null;
     const longest = waits.reduce((p, w) => (Number(w.wait) > (p ? Number(p.wait) : -1) ? w : p), null);
     const reporting = cps.filter((c) => c.has_unit);
+    // No IQ camera counts but an OpenGate report is in: screen the headline numbers from the gate (hourly).
+    const G = gateFallback(buckets);
+    if (G) { total = G.total; }
+    $("tPeakLabel").textContent = G ? "Busiest hour" : "Busiest 15 minutes";
     $("tTotal").textContent = fmt(total);
-    $("tTotalNote").textContent = buckets.length ? "since " + time(buckets[0].t) : "no counts yet";
+    $("tTotalNote").textContent = G ? "OpenGate passes in, from " + time(G.first) : buckets.length ? "since " + time(buckets[0].t) : "no counts yet";
     $("tLast").textContent = fmt(last15);
     $("tLastNote").textContent = "about " + Math.round(last15 / 15) + " people a minute";
-    $("tPeak").textContent = peak && peak.n ? fmt(peak.n) : "–";
-    $("tPeakNote").textContent = peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : " ";
+    $("tPeak").textContent = G ? fmt(G.peak.v) : peak && peak.n ? fmt(peak.n) : "–";
+    $("tPeakNote").textContent = G ? time(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000) : peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : " ";
     const manual = data.manual_wait || null; // wait typed by staff when there's no line camera, e.g. "Free flow"
     $("tWait").textContent = waitNow == null ? (manual || "–") : waitNow + " min";
     $("tWaitNote").textContent = waitNow == null ? (manual ? "checked on site" : "needs a line camera at this event") : longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : " ";
@@ -445,7 +463,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     $("tCpsNote").textContent = noCam.length ? "no camera at " + noCam.map((c) => c.name).join(", ") : "every checkpoint has a counter";
 
     // charts
-    const arr = buckets.map((b) => ({ t: b.t, v: Number(b.n), peak: peak && b.t === peak.t && b.n > 0 }));
+    const arr = G ? G.arr : buckets.map((b) => ({ t: b.t, v: Number(b.n), peak: peak && b.t === peak.t && b.n > 0 }));
     barChart($("arrChart"), arr, { label: (v) => fmt(v) + " people", short: (v) => fmt(v), empty: "No counts yet for this event." });
     $("waitLegend").hidden = !waits.length;
     barChart($("waitChart"), waits.map((w) => ({ t: w.t, v: Number(w.wait) })),
@@ -476,8 +494,8 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     $("updList").replaceChildren(...(shown.length ? shown.map((u) => updateRow(u, false)) : [el("div", "empty", "No updates shared yet.")]));
 
     // report
-    const hours = buckets.length ? Math.max(0.25, buckets.length / 4) : 0;
-    const counted = cps.filter((c) => Number(c.total_in) > 0);
+    const hours = G ? G.arr.length : buckets.length ? Math.max(0.25, buckets.length / 4) : 0;
+    const counted = G ? G.cps : cps.filter((c) => Number(c.total_in) > 0);
     const busiest = counted.slice().sort((a, b) => b.total_in - a.total_in)[0];
     const avgWait = waits.length ? Math.round(waits.reduce((a, w) => a + Number(w.wait), 0) / waits.length) : null;
     const byCat = {};
@@ -486,15 +504,16 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     $("rSub").textContent = $("evSub").textContent;
     const fact = (label, value, note) => { const d = el("div"); d.append(el("span", "label", label), el("span", "num", value)); if (note) d.append(el("small", null, note)); return d; };
     $("rFacts").replaceChildren(
-      fact("Total screened", fmt(total)),
-      fact("Busiest 15 minutes", peak && peak.n ? fmt(peak.n) : "–", peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : ""),
+      fact("Total screened", fmt(total), G ? "through the OpenGate" : ""),
+      G ? fact("Busiest hour", fmt(G.peak.v), time(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000))
+        : fact("Busiest 15 minutes", peak && peak.n ? fmt(peak.n) : "–", peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : ""),
       fact("Busiest checkpoint", busiest ? busiest.name : "–", busiest && total ? Math.round((busiest.total_in / total) * 100) + "% of arrivals" : ""),
       fact("Avg per checkpoint per hour", counted.length && hours ? fmt(Math.round(total / counted.length / hours)) : "–"),
       avgWait == null && manual != null
         ? fact("Security wait", manual, "checked on site")
         : fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera"),
       fact("Incidents logged", String(updates.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", ")));
-    barChart($("rChart"), arr, { label: (v) => fmt(v) + " people", short: (v) => fmt(v), empty: "No counts for this event." });
+    barChart($("rChart"), arr, { label: (v) => fmt(v) + (G ? " people that hour" : " people"), short: (v) => fmt(v), empty: "No counts for this event." });
     renderGateReport();
     $("rInc").replaceChildren(...(updates.length ? updates.map((u) => updateRow(u, false)) : [el("div", "empty", asClient ? "No incident reports shared with the client." : "No incident reports for this event.")]));
 
