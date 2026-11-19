@@ -148,6 +148,13 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   .bar, .ticks span { flex: 1 1 0; min-width: 0; }
   .ticks span { font-size: 8px; overflow: visible; }
   .report h3 { font-size: 15px !important; margin: 4px 0 !important; }
+  /* Joe: the client report must fit on one page. */
+  .report { gap: 8px; }
+  .bars { height: 120px; padding-top: 14px; }
+  .bar i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .upd { padding: 6px 0 !important; gap: 2px !important; }
+  #tabReport { break-inside: avoid; page-break-inside: avoid; }
+  .foot { margin-top: 4px; }
 }
 </style>
 </head>
