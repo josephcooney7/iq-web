@@ -189,7 +189,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
 
     <!-- OpenGate metal detectors (office staff only; from NetID Anywhere report exports) -->
     <div class="panel" id="gatePanel" data-staffonly hidden>
-      <div class="panel-head"><h2>OpenGate metal detectors</h2><span>Staff only · from NetID reports · <a id="gateScreenLink" href="/gate">Open gate screen</a></span></div>
+      <div class="panel-head"><h2>Screening equipment (OpenGate, Evolv, X-ray)</h2><span>Staff only · from NetID reports · <a id="gateScreenLink" href="/gate">Open gate screen</a></span></div>
       <div class="tiles">
         <div class="tile"><span class="label">Gate passes</span><span class="num" id="gPass">–</span><span class="note" id="gPassNote">&nbsp;</span></div>
         <div class="tile"><span class="label">Alarms</span><span class="num" id="gAlarm" style="color:var(--bad)">–</span><span class="note" id="gAlarmNote">&nbsp;</span></div>
@@ -412,7 +412,15 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     arr.forEach((x) => { x.peak = x === peak; });
     const cps = (g.checkpoints || []).filter((c) => Number(c.transits) > 0).map((c) => ({ name: c.name, total_in: Number(c.transits) }));
     const alarms = (g.checkpoints || []).reduce((a, c) => a + Number(c.alarms || 0), 0);
-    return { arr, peak, first: on[0].t, total: cps.reduce((a, c) => a + c.total_in, 0), alarms, cps };
+    // Which screening equipment the people numbers came from (OpenGate = ceia, Evolv = evolv), and X-ray bags.
+    const people = (g.checkpoints || []).filter((c) => Number(c.transits) > 0);
+    const nEvolv = people.filter((c) => c.vendor === "evolv").length, nGate = people.length - nEvolv;
+    const xr = (g.checkpoints || []).filter((c) => c.vendor === "xray" && Number(c.bags) > 0);
+    const bags = xr.reduce((a, c) => a + Number(c.bags), 0);
+    const kinds = [nEvolv ? nEvolv + " Evolv checkpoint" + (nEvolv > 1 ? "s" : "") : "", nGate ? nGate + " Open Gate checkpoint" + (nGate > 1 ? "s" : "") : ""].filter(Boolean);
+    const through = people.length === 1 ? people[0].name : kinds.join(" and ");
+    const source = nEvolv && nGate ? "Evolv and OpenGate" : nEvolv ? "Evolv" : "OpenGate";
+    return { arr, peak, first: on[0].t, total: cps.reduce((a, c) => a + c.total_in, 0), alarms, cps, through, source, evolv: nEvolv > 0, bags, nXray: xr.length };
   }
 
   const ROUTINE = new Set(["k9_sweep"]);
@@ -463,7 +471,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     if (G) { total = G.total; }
     $("tPeakLabel").textContent = G ? "Busiest hour" : "Busiest 15 minutes";
     $("tTotal").textContent = fmt(total);
-    $("tTotalNote").textContent = G ? "OpenGate passes in, from " + time(G.first) : buckets.length ? "since " + time(buckets[0].t) : "no counts yet";
+    $("tTotalNote").textContent = G ? G.source + " screenings, from " + time(G.first) : buckets.length ? "since " + time(buckets[0].t) : "no counts yet";
     $("tLast").textContent = fmt(last15);
     $("tLastNote").textContent = "about " + Math.round(last15 / 15) + " people a minute";
     $("tPeak").textContent = G ? fmt(G.peak.v) : peak && peak.n ? fmt(peak.n) : "–";
@@ -525,10 +533,11 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
         : fact("Average security wait", avgWait == null ? "–" : avgWait + " min", longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : "no line camera");
     const incFact = fact("Incidents logged", String(incidents.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", "));
     $("rFacts").replaceChildren(...(G ? [
-      fact("Total screened", fmt(total), "through " + (G.cps.length === 1 ? G.cps[0].name : G.cps.length + " gates")),
+      fact("Total screened", fmt(total), "through " + G.through),
       fact("Busiest hour", fmt(G.peak.v), time(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000)),
-      fact("Metal detector alarms", fmt(G.alarms), total && G.alarms ? "about 1 in " + Math.max(1, Math.round(total / G.alarms)) + " guests" : ""),
+      fact(G.evolv ? "Screening alarms" : "Metal detector alarms", fmt(G.alarms), total && G.alarms ? "about 1 in " + Math.max(1, Math.round(total / G.alarms)) + " guests" : ""),
       fact("Alarm rate", pct(G.alarms, total)),
+      ...(G.bags ? [fact("Bags X-rayed", fmt(G.bags), "through " + G.nXray + " X-ray machine" + (G.nXray > 1 ? "s" : ""))] : []),
       waitFact, incFact] : [
       fact("Total screened", fmt(total)),
       fact("Busiest 15 minutes", peak && peak.n ? fmt(peak.n) : "–", peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : ""),
