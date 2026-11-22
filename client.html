@@ -363,6 +363,18 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
   const fmt = (n) => Number(n || 0).toLocaleString("en-US");
   const time = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const day = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  const dkey = (t) => new Date(t).toDateString();
+  const wday = (t) => new Date(t).toLocaleDateString([], { weekday: "short" });
+  // Multi-day events (e.g. a Thu-Sun show): show the date range and put the weekday on times.
+  let multiDay = false;
+  const when = (t) => (multiDay ? wday(t) + " " : "") + time(t);
+  const dayRange = (a, b) => {
+    if (!b || dkey(a) === dkey(b)) return day(a);
+    const A = new Date(a), B = new Date(b);
+    const sameMonth = A.getMonth() === B.getMonth() && A.getFullYear() === B.getFullYear();
+    return A.toLocaleDateString([], { month: "short", day: "numeric" }) + " – " +
+      (sameMonth ? B.getDate() + ", " + B.getFullYear() : day(b));
+  };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
   let data = null, eventId = new URLSearchParams(location.search).get("event") || null, tab = "Live", asClient = isClient, timer = null;
@@ -397,10 +409,12 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
       v.style.height = Math.round((it.v / max) * (opts.h || 150)) + "px";
       if (opts.color) v.style.background = opts.color(it.v);
       if (it.peak) v.className = "peak";
-      b.title = time(it.t) + ": " + opts.label(it.v);
+      b.title = when(it.t) + ": " + opts.label(it.v);
       b.append(el("small", null, items.length <= 24 ? opts.short(it.v) : ""), v);
       bars.append(b);
-      ticks.append(el("span", null, i % every === 0 ? time(it.t).replace(/\s?[AP]M$/i, "") : ""));
+      // Multi-day charts label each new day with its weekday instead of a time.
+      const newDay = multiDay && (i === 0 || dkey(items[i - 1].t) !== dkey(it.t));
+      ticks.append(el("span", null, newDay ? wday(it.t) : !multiDay && i % every === 0 ? time(it.t).replace(/\s?[AP]M$/i, "") : ""));
     });
     const inner = el("div"); inner.style.minWidth = Math.max(items.length * 26, 300) + "px";
     inner.append(bars, ticks); wrap.append(inner); box.append(wrap);
@@ -447,7 +461,10 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     const ev = data.event || {}, cps = data.checkpoints || [], buckets = data.buckets || [], waits = data.wait_buckets || [];
     const updates = (data.updates || []).filter((u) => !asClient || u.visible_to_client);
     $("evName").textContent = ev.name || "No event";
-    $("evSub").textContent = [ev.client, ev.venue, ev.starts_at ? day(ev.starts_at) : ""].filter(Boolean).join(" · ");
+    // ends_at is exclusive (e.g. midnight UTC), so step back a minute before reading its date.
+    const evEnd = ev.ends_at ? new Date(new Date(ev.ends_at).getTime() - 60000).toISOString() : null;
+    multiDay = !!(ev.starts_at && evEnd && dkey(ev.starts_at) !== dkey(evEnd));
+    $("evSub").textContent = [ev.client, ev.venue, ev.starts_at ? dayRange(ev.starts_at, evEnd) : ""].filter(Boolean).join(" · ");
     document.title = (ev.name ? ev.name + " · " : "") + "Stapleton IQ";
 
     // event picker
@@ -478,11 +495,11 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     if (G) { total = G.total; }
     $("tPeakLabel").textContent = G ? "Busiest hour" : "Busiest 15 minutes";
     $("tTotal").textContent = fmt(total);
-    $("tTotalNote").textContent = G ? G.source + " screenings, from " + time(G.first) : buckets.length ? "since " + time(buckets[0].t) : "no counts yet";
+    $("tTotalNote").textContent = G ? G.source + " screenings, from " + when(G.first) : buckets.length ? "since " + time(buckets[0].t) : "no counts yet";
     $("tLast").textContent = fmt(last15);
     $("tLastNote").textContent = "about " + Math.round(last15 / 15) + " people a minute";
     $("tPeak").textContent = G ? fmt(G.peak.v) : peak && peak.n ? fmt(peak.n) : "–";
-    $("tPeakNote").textContent = G ? time(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000) : peak && peak.n ? time(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : " ";
+    $("tPeakNote").textContent = G ? when(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000) : peak && peak.n ? when(peak.t) + " to " + time(new Date(peak.t).getTime() + 15 * 60000) : " ";
     const manual = data.manual_wait || null; // wait typed by staff when there's no line camera, e.g. "Free flow"
     $("tWait").textContent = waitNow == null ? (manual || "–") : waitNow + " min";
     $("tWaitNote").textContent = waitNow == null ? (manual ? "checked on site" : "needs a line camera at this event") : longest ? "longest " + Math.round(longest.wait) + " min at " + time(longest.t) : " ";
@@ -541,7 +558,7 @@ legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
     const incFact = fact("Incidents logged", String(incidents.length), Object.entries(byCat).map(([k, n]) => n + " " + k.toLowerCase()).join(", "));
     $("rFacts").replaceChildren(...(G ? [
       fact("Total screened", fmt(total), "through " + G.through),
-      fact("Busiest hour", fmt(G.peak.v), time(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000)),
+      fact("Busiest hour", fmt(G.peak.v), when(G.peak.t) + " to " + time(new Date(G.peak.t).getTime() + 3600000)),
       fact(G.evolv ? "Screening alarms" : "Metal detector alarms", fmt(G.alarms), total && G.alarms ? "about 1 in " + Math.max(1, Math.round(total / G.alarms)) + " guests" : ""),
       fact("Alarm rate", pct(G.alarms, total)),
       ...(G.bags ? [fact("Bags X-rayed", fmt(G.bags), "through " + G.nXray + " X-ray machine" + (G.nXray > 1 ? "s" : ""))] : []),
